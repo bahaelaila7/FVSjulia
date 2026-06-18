@@ -67,7 +67,7 @@ function DSTASH(buffer::AbstractVector{Float32}, ipnt::Integer)
                 fvsRtnCode = Int32(2)
                 return nothing
             end
-            seek(io, Int(seekReadPos) - 1)   # Fortran POS is 1-based byte offset
+            seek(io, Int(seekReadPos))   # readFilePos came from position() (0-based)
         catch
             fvsRtnCode = Int32(2)
             return nothing

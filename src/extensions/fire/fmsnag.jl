@@ -12,7 +12,7 @@
 
 function FMSNAG(iyr::Integer, yr1::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMSNAG", Int32(6), ICYC)
+    debug = DBCHK(false, "FMSNAG", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " FMSNAG CYCLE=%2d IYR=%5d YR1=%5d NSNAG=%5d\n",
                 ICYC, iyr, yr1, NSNAG)
@@ -173,7 +173,7 @@ function FMSNAG(iyr::Integer, yr1::Integer)
             local dktime_ref = Ref(Float32(0))
             FMSNGDK(VARACD, jsp, DBHS[i], dktime_ref)
             local dktime::Float32 = dktime_ref[]
-            if (iyr - YRDEAD[i]) >= Int32(dktime)
+            if Float32(iyr - YRDEAD[i]) >= dktime
                 HARD_FM[i] = false
             end
         end

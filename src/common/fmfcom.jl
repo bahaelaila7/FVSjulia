@@ -16,6 +16,7 @@ FM89YR::Int32   = Int32(0)    # year of FM8/9→FM5/26 switch (CA shrub delay)
 IFLOGIC::Int32  = Int32(0)    # fire behavior method: 0=old, 1=new, 2=modelled loads
 IFMSET::Int32   = Int32(0)    # fuel model set: 0=13, 1=40, 2=53 (new FM logic)
 JSNOUT::Int32   = Int32(0)    # snag output table unit
+JPOTFL::Int32   = Int32(0)    # potential-fire text report unit (0 = no text file)
 ND::Int32       = Int32(0)    # number of dead fuel size classes in current FM
 NL::Int32       = Int32(0)    # number of live fuel size classes
 NFMODS::Int32   = Int32(0)    # number of active user-defined fuel models
@@ -74,6 +75,7 @@ DPMOD::Float32   = Float32(1.0)   # depth modifier from harvest/treatment
 EXPOSR::Float32  = Float32(0.0)   # mineral soil exposure (%)
 FIRACR = zeros(Float32, 2)         # fire area: 1=stand only, 2=crowning area
 FWIND::Float32   = Float32(0.0)   # dominant wind speed (mi/hr)
+WNDSPD::Float32  = Float32(0.0)   # working wind speed for potential-fire scenarios (FMPOFL)
 LARGE::Float32   = Float32(0.0)   # coarse fuels loading (ton/acre, >3")
 MINSOL::Float32  = Float32(0.0)   # mineral soil exposure in one year
 OLARGE::Float32  = Float32(0.0)   # previous year LARGE

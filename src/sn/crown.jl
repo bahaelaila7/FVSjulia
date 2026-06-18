@@ -459,11 +459,11 @@ function CROWN()
                 end
             end
 
-            icri = Int32(crnew[i] + Float32(0.5))
+            icri = trunc(Int32, crnew[i] + Float32(0.5))
 
             if LSTART || ICR[i] == Int32(0)
                 if DBH[i] >= _CROWN_DLOW[ispc] && DBH[i] <= _CROWN_DHI[ispc]
-                    icri = Int32(Float32(icri) * _CROWN_CRNMLT[ispc])
+                    icri = trunc(Int32, Float32(icri) * _CROWN_CRNMLT[ispc])
                 end
             end
 
@@ -477,10 +477,10 @@ function CROWN()
                             crmax, crln, icri, i, crnew[i])
                 end
                 if Float32(icri) > crmax
-                    icri = Int32(crmax + Float32(0.5))
+                    icri = trunc(Int32, crmax + Float32(0.5))
                 end
                 if icri < Int32(10) && _CROWN_CRNMLT[ispc] == Float32(1)
-                    icri = Int32(crmax + Float32(0.5))
+                    icri = trunc(Int32, crmax + Float32(0.5))
                 end
             end
 
@@ -489,7 +489,7 @@ function CROWN()
                 hn   = Float32(NORMHT[i]) / Float32(100)
                 hd   = hn - Float32(ITRUNC[i]) / Float32(100)
                 cl   = (Float32(icri) / Float32(100)) * hn - hd
-                icri = Int32(cl * Float32(100) / hn + Float32(0.5))
+                icri = trunc(Int32, cl * Float32(100) / hn + Float32(0.5))
                 if debug
                     @printf(io_units[Int32(JOSTND)],
                             " IN CROWN 9030 I,ITRUNC,NORMHT,HN,HD,ICRI,CL =%5d%5d%5d%10.3f%10.3f%5d%10.3f\n",
@@ -498,9 +498,9 @@ function CROWN()
             end
 
             # Clamp ICR
-            if icri > Int32(95); icri = Int32(95); end
-            if icri < Int32(10) && _CROWN_CRNMLT[ispc] == Float32(1); icri = Int32(10); end
-            if icri < Int32(1);  icri = Int32(1);  end
+            if icri > Int32(95); icri = trunc(Int32, 95); end
+            if icri < Int32(10) && _CROWN_CRNMLT[ispc] == Float32(1); icri = trunc(Int32, 10); end
+            if icri < Int32(1);  icri = trunc(Int32, 1);  end
             ICR[i] = icri
         end # tree loop
 
@@ -518,15 +518,15 @@ function CROWN()
             if ICR[i] > Int32(0); continue; end
             d  = DBH[i]
             cr = DUBSCR(d)
-            icri = Int32(cr * Float32(100) + Float32(0.5))
+            icri = trunc(Int32, cr * Float32(100) + Float32(0.5))
             if ITRUNC[i] != Int32(0)
                 hn   = Float32(NORMHT[i]) / Float32(100)
                 hd   = hn - Float32(ITRUNC[i]) / Float32(100)
                 cl   = (Float32(icri) / Float32(100)) * hn - hd
-                icri = Int32(cl * Float32(100) / hn + Float32(0.5))
+                icri = trunc(Int32, cl * Float32(100) / hn + Float32(0.5))
             end
-            if icri > Int32(95); icri = Int32(95); end
-            if icri < Int32(10); icri = Int32(10); end
+            if icri > Int32(95); icri = trunc(Int32, 95); end
+            if icri < Int32(10); icri = trunc(Int32, 10); end
             ICR[i] = icri
         end
     end

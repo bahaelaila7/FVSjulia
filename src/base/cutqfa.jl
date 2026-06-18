@@ -81,11 +81,9 @@ function CUTQFA(valmin::Real, valmax::Real, ispcut::Integer, lzeide::Bool, icfla
             _QFACOM_CLSTAR[i,1] = _QFACOM_TPACLS[i,1] > 0 ?
                 cstocktpa / _QFACOM_TPACLS[i,1] : Float32(0)
         else  # SDI target
-            sdic_ref  = Ref(Float32(0)); sdic2_ref = Ref(Float32(0))
-            a_ref     = Ref(Float32(0)); b_ref     = Ref(Float32(0))
-            SDICLS(Int32(ispcut), dlo, dhi, Int32(1), sdic_ref, sdic2_ref, a_ref, b_ref, Int32(0))
+            (sdic_v, sdic2_v, _a, _b) = SDICLS(Int32(ispcut), dlo, dhi, Int32(1), Int32(0))
             _QFACOM_CLSTAR[i,1] = _QFACOM_TPACLS[i,1] > 0 ?
-                (lzeide ? sdic2_ref[] : sdic_ref[]) / _QFACOM_TPACLS[i,1] : Float32(0)
+                (lzeide ? sdic2_v : sdic_v) / _QFACOM_TPACLS[i,1] : Float32(0)
         end
     end
 
@@ -189,7 +187,7 @@ function CYCQFA(valmin_ref::Ref{Float32}, valmax_ref::Ref{Float32},
     # Advance to first class with excess
     while ic <= ndcls
         excess = _QFACOM_TPACLS[ic,1] * _QFACOM_CLSTAR[ic,1] - _QFACOM_CLSTAR[ic,2]
-        if excess > 1e-5f0
+        if excess > 1.0f-5
             valmin_ref[] = _QFACOM_DCLS[ic] - diacw_f / 2f0
             valmax_ref[] = _QFACOM_DCLS[ic] + diacw_f / 2f0
             if qfatar <= 0
@@ -211,7 +209,7 @@ function CYCQFA(valmin_ref::Ref{Float32}, valmax_ref::Ref{Float32},
     for i in Int(_QFACOM_ICOUNT[]):ndcls
         e1 = _QFACOM_TPACLS[i,1] * _QFACOM_CLSTAR[i,1] - _QFACOM_CLSTAR[i,2]
         if debug1; @printf(io, " EXCESS1= %g\n", e1); end
-        if e1 > 1e-5f0; lqfa_ref[] = true; break; end
+        if e1 > 1.0f-5; lqfa_ref[] = true; break; end
     end
     if Int(_QFACOM_ICOUNT[]) > ndcls; lqfa_ref[] = false; end
     if debug1

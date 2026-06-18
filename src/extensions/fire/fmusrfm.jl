@@ -5,9 +5,9 @@
 
 function FMUSRFM(iyr::Integer, fmd_ref::Ref{Int32})
     # Activity keyword codes
-    local act_fuelmodl::Int32 = Int32(2538)
-    local act_fueltret::Int32 = Int32(2525)
-    local act_firecalc::Int32 = Int32(2549)
+    local act_fuelmodl = Int32[2538]
+    local act_fueltret = Int32[2525]
+    local act_firecalc = Int32[2549]
 
     # Depth multiplier: DPMULT(harvest_type, fuel_treat+1)
     # harvest: 1=ground, 2=high-lead, 3=precomm/heli

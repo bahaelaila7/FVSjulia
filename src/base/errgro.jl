@@ -7,9 +7,9 @@
 # ENTRY GRSTOP         → fvsSetRtnCode(ICCODE); return
 # ENTRY fvsGetICCode(I)→ I = ICCODE; return
 
-# Stub for DBSERROR (DBS/SQLite extension — records error to database)
-# Implemented fully in extensions/dbs/dbsqlite.jl
-DBSERROR(nplt::AbstractString, cmsg::AbstractString) = nothing
+# DBSERROR (records error to FVS_Error) is implemented in extensions/dbs/dbsqlite.jl;
+# a fallback so base-only loads still resolve the symbol.
+function DBSERROR end
 
 function ERRGRO(lretrn::Bool, ierrn::Int32)
     pref = "********   "   # 11 chars

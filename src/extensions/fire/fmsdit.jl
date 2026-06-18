@@ -6,7 +6,7 @@
 
 function FMSDIT()
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMSDIT", Int32(6), ICYC)
+    debug = DBCHK(false, "FMSDIT", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING ROUTINE FMSDIT CYCLE = %2d LFMON=%s\n",
                 ICYC, LFMON)

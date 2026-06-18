@@ -396,12 +396,12 @@ function CRATET()
     if debug; @printf(io_units[Int(JOSTND)], "IN CRATET, CALLING FINDAG\n"); end
     for i in 1:Int(ITRN)
         if ABIRTH[i] <= Float32(0)
-            sitage = Float32(0); sitht = Float32(0)
+            sitage_r = Ref(Float32(0)); sitht_r = Ref(Float32(0))
             agmax  = Float32(0); htmax = Float32(0); htmax2 = Float32(0)
-            ispc_v = Int(ISP[i])
+            ispc_v = Int32(ISP[i])
             d_v  = Float32(DBH[i]); h_v = Float32(HT[i]); d2_v = Float32(0)
-            FINDAG(i, ispc_v, d_v, d2_v, h_v, sitage, sitht, agmax, htmax, htmax2, debug)
-            if sitage > Float32(0); ABIRTH[i] = sitage; end
+            FINDAG(Int32(i), ispc_v, d_v, d2_v, h_v, sitage_r, sitht_r, agmax, htmax, htmax2, debug)
+            if sitage_r[] > Float32(0); ABIRTH[i] = sitage_r[]; end
         end
     end
 
@@ -421,6 +421,11 @@ function CRATET()
 
     if Int(ITRN) <= 0; @goto label_500; end
 
+    # NOTE: cratet.f has NO SETUP/SPESRT here — the species chain sort from the
+    # earlier SPESRT (cratet.f:234 ≈ line 149 above) is still valid. A bare SETUP()
+    # here rebuilt IND1 from the IND2 array AFTER COMPRS/COMCUP reuse it as scratch,
+    # corrupting the species-order index (wrong species in wrong blocks → wrong
+    # BA-weighted SDIMAX). Removed to match the Fortran.
     if debug; @printf(io_units[Int(JOSTND)], "CALLING DENSE, CYCLE= %2d\n", ICYC); end
     DENSE()
 

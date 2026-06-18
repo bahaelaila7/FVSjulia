@@ -364,7 +364,7 @@ function GETSTD()
     global AUTEFF   = reals[ 12]
     global AVH      = reals[ 13]
     global BA       = reals[ 14]
-    global BAA      = reals[ 15]
+    global BAA_ES   = reals[ 15]
     global BAALN    = reals[ 16]
     global BAASQ    = reals[ 17]
     global BAF      = reals[ 18]
@@ -440,7 +440,7 @@ function GETSTD()
     global TFPA     = reals[ 88]
     global THRES1   = reals[ 89]
     global THRES2   = reals[ 90]
-    global TIME     = reals[ 91]
+    global TIME_ES  = reals[ 91]
     global TLAT     = reals[ 92]
     global TPACRE   = reals[ 93]
     global TPAMIN   = reals[ 94]
@@ -650,12 +650,13 @@ function GETSTD()
     BFREAD(WK3, ipnt, ILIMIT, view(REIN,        1:2),         Int32(2),          Int32(2))
     BFREAD(WK3, ipnt, ILIMIT, view(RELDSP,      1:MAXSP),     Int32(MAXSP),      Int32(2))
     BFREAD(WK3, ipnt, ILIMIT, view(RHCON,       1:MAXSP),     Int32(MAXSP),      Int32(2))
-    # ROSUM/IOSUM: read 20 Float32 per cycle col, reinterpret bits back to Int32
+    # IOSUM: read all 22 Float32 per cycle col, reinterpret bits back to Int32
+    # (must match PUTSTD's 22-row write so the NVB SCuFt columns round-trip).
     k_cyc = icyc_p1
-    let rosum_buf = zeros(Float32, 20)
+    let rosum_buf = zeros(Float32, 22)
         for i in 1:k_cyc
-            BFREAD(WK3, ipnt, ILIMIT, rosum_buf, Int32(20), Int32(2))
-            IOSUM[1:20, i] .= reinterpret(Int32, rosum_buf)
+            BFREAD(WK3, ipnt, ILIMIT, rosum_buf, Int32(22), Int32(2))
+            IOSUM[1:22, i] .= reinterpret(Int32, rosum_buf)
         end
     end
     # RSEED ↔ S0: read two Float32 bits, reconstruct Float64

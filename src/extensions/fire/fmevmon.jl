@@ -86,7 +86,7 @@ function FMEVSNG(rval_ref::Ref{Float32}, ix::Integer, jx::Integer, kx::Integer,
         local tpa_h::Float32 = DENIH[i]
         if tpa_h > 0.0f0 && hs_h >= Float32(xlht) && hs_h < Float32(xhht)
             local x::Float32 = _fmev_snag_val(i, ix, d, hs_h)
-            if HARD[i]; xh += x; else; xs += x; end
+            if HARD_FM[i]; xh += x; else; xs += x; end
         end
 
         # Initially-soft snags
@@ -192,8 +192,8 @@ function FMTREM(dsng1::AbstractVector{Float32}, ssng1::AbstractVector{Float32},
         DBHC[i]   = DBH[i]
         HTC[i]    = HT[i]
         for j in 1:6; CROWNWC[i, j] = CROWNW[i, j]; end
-        if PREMCR[i] < 1e-5f0; PREMCR[i] = 0.0f0; end
-        if PREMST[i] < 1e-5f0; PREMST[i] = 0.0f0; end
+        if PREMCR[i] < 1.0f-5; PREMCR[i] = 0.0f0; end
+        if PREMST[i] < 1.0f-5; PREMST[i] = 0.0f0; end
     end
     return nothing
 end

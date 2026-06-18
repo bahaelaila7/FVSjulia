@@ -11,7 +11,7 @@ function FMSSUM(iyr::Integer)
 
     for ii in 1:Int(NSNAG)
         tsf[7] += DENIS[ii]
-        if HARD[ii]
+        if HARD_FM[ii]
             thd[7] += DENIH[ii]
         else
             tsf[7] += DENIH[ii]
@@ -19,7 +19,7 @@ function FMSSUM(iyr::Integer)
         for i in 1:6
             if DBHS[ii] >= SNPRCL[i]
                 tsf[i] += DENIS[ii]
-                if HARD[ii]
+                if HARD_FM[ii]
                     thd[i] += DENIH[ii]
                 else
                     tsf[i] += DENIH[ii]

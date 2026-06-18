@@ -153,7 +153,7 @@ function BWEPPGT(r1, i1, i2, i3); return nothing; end               # budworm pa
 function BWEPPPT(r1, i1, i2, i3); return nothing; end               # budworm pattern put
 function DFTMGO(ltmgo::Ref{Bool}); ltmgo[] = false; return nothing; end
 function TMCOUP(); return nothing; end
-function ESNUTR(); return nothing; end
+# ESNUTR → real implementation in base/esnutr.jl
 function CLAUESTB(); return nothing; end
 
 # ---------------------------------------------------------------------------
@@ -189,20 +189,18 @@ function ECREMS(); return nothing; end
 function ECVOLS(); return nothing; end
 function ECEND(); return nothing; end
 function ECLBL(); return nothing; end
-function ECCALC(iy::AbstractVector, icyc::Integer, jsp::Any, mgmid::AbstractString,
-                nplt::AbstractString, ititle::AbstractString); return nothing; end
-function ECSTATUS(icyc::Integer, ncyc::Integer, iy::AbstractVector, ipass::Integer)
-    return nothing
-end
+# ECCALC, ECSTATUS, ECSETP → real implementations in extensions/econ/eccalc.jl
 
 # ---------------------------------------------------------------------------
 # Cover model extension (cvextension/)
 # ---------------------------------------------------------------------------
 function CVGO(lcvatv::Ref{Bool}); lcvatv[] = false; return nothing; end
+function CVGO(::Bool); return nothing; end
 function CVBROW(lactive::Bool); return nothing; end
 function CVCNOP(lactive::Bool); return nothing; end
 function CVOUT(); return nothing; end
 function CVACTV(lactv::Ref{Bool}); lactv[] = false; return nothing; end
+function CVACTV(::Bool); return nothing; end
 
 # ---------------------------------------------------------------------------
 # FVSSTD — user volume standards
@@ -339,13 +337,24 @@ function DFBIN(args...);  ERRGRO(true, Int32(11)); return nothing; end  # Dougla
 function DFBINT(args...); return nothing; end   # Douglas-fir beetle initialize
 function DFTMIN(args...); ERRGRO(true, Int32(11)); return nothing; end  # DFTM moth read (not linked)
 function ECAVAL(args...); return nothing; end   # economics evaluation
-function ECIN(args...);   return nothing; end   # economics read
-function ECINIT(args...); return nothing; end   # economics initialize
-function ESEZCR(args...); return nothing; end   # establishment crown ratio
-function ESIN(args...);   return nothing; end   # establishment read
-function ESINIT(args...); return nothing; end   # establishment initialize
-function ESNOAU(args...); return nothing; end   # establishment no-auto
-function ESPLT2(args...); return nothing; end   # establishment plot 2
+# ECIN → real implementation in extensions/econ/ecin.jl
+# ECINIT → real implementation in extensions/econ/eccalc.jl
+# ESEZCR, ESINIT → real implementations in base/esinit.jl
+# ESIN → real implementation in base/esin.jl
+# esin.f ENTRY ESNOAU — NOAUTOES keyword: disable automatic tallies, ingrowth & sprouting
+function ESNOAU(paskey::AbstractString, lkecho::Bool)
+    global LAUTAL = false
+    global LINGRW = false
+    global LSPRUT = false
+    global STOADJ = Float32(0.0)
+    if lkecho
+        io = get(io_units, Int32(JOSTND), stdout)
+        @printf(io, "\n%-8s   TALLIES AND INGROWTH WILL NOT BE ADDED AUTOMATICALLY.\n", paskey)
+        @printf(io, "            NO SPROUTING WILL BE SIMULATED.\n")
+    end
+    return nothing
+end
+# ESPLT2 → real implementation in base/esplt.jl
 # FFIN implemented in base/ffin.jl
 # FMIN / FMKEY / FMKEYDMP / FMKEYRDR implemented in extensions/fire/fmin.jl
 # FMINIT / FMATV / FMSATV / FMLNKD implemented in extensions/fire/fminit.jl
@@ -390,9 +399,9 @@ function SVCWD(iyear::Integer); return nothing; end
 # ---------------------------------------------------------------------------
 # Establishment model (estab extension — called from ESNUTR stub)
 # ---------------------------------------------------------------------------
-function ESTAB(kdt::Integer); return nothing; end
+# ESTAB → real implementation in base/estab.jl
 function ESADDT(icall::Integer); return nothing; end
-function ESUCKR(); return nothing; end
+# ESUCKR → real implementation in base/esuckr.jl
 function ESCPRS(itrgt::Integer, debug::Bool); return nothing; end
 function ESFLTR(); return nothing; end  # override no-op in fvs.jl for completeness
 
@@ -422,14 +431,7 @@ function ESMSGS(joregt::Integer)
     return nothing
 end
 
-# ESPREP: predict default site prep probabilities (STRP variant defaults)
-function ESPREP(iser::Integer, pnone_ref::Ref{Float32}, pmech_ref::Ref{Float32},
-                pburn_ref::Ref{Float32})
-    pnone_ref[] = 0.75f0
-    pmech_ref[] = 0.20f0
-    pburn_ref[] = 0.05f0
-    return nothing
-end
+# ESPREP → real implementation in base/estab_helpers.jl
 
 # ESPRIN: schedule a site prep activity from keyword input
 function ESPRIN(iactk::Integer, idsdat::Integer, irecnt::Integer, keywrd::AbstractString,
@@ -478,14 +480,7 @@ function FMCFIM(iyr::Integer, fmd::Integer, uwind::Real, ibyram::Real,
     return nothing
 end
 
-# ---------------------------------------------------------------------------
-# Economics (econ extension) — ECSETP
-# ---------------------------------------------------------------------------
-# ECSETP: initialize ECON start year and load sorted harvest revenue indexes
-function ECSETP(iy::AbstractVector)
-    # Without ECON extension active, nothing to do
-    return nothing
-end
+# ECSETP → real implementation in extensions/econ/eccalc.jl
 
 # ---------------------------------------------------------------------------
 # Volume library stubs (bark/taper functions called from NVEL)
@@ -649,34 +644,9 @@ end
 # ESOUT: copy establishment output file to JOSTND (no-op when IPRINT==0 or stubbed)
 function ESOUT(lfg_ref::Ref{Bool}); return nothing; end
 
-# ESETPR: set site prep inputs for establishment model
-function ESETPR(meth_ref::Ref{Int32}, zmech_ref::Ref{Float32}, zburn_ref::Ref{Float32},
-                pnone_ref::Ref{Float32}, pmech_ref::Ref{Float32}, pburn_ref::Ref{Float32},
-                ialn::AbstractVector{Int32}, idsdat::Integer, kdt::Integer, ip::Integer)
-    meth_ref[] = Int32(0)
-    zmech_ref[] = 0.0f0; zburn_ref[] = 0.0f0
-    pnone_ref[] = 0.0f0; pmech_ref[] = 0.0f0; pburn_ref[] = 0.0f0
-    return nothing
-end
+# ESETPR, ESGENT, ESSUBH, ESTIME → real implementations in base/estab_helpers.jl
 
-# ESGENT: add height increment to regenerated trees using REGENT
-function ESGENT(itrnin::Integer); return nothing; end
-
-# ESSUBH: look up species subhabitat coefficients for establishment model
-function ESSUBH(i::Integer, hht_ref::Ref{Float32}, emsqr_ref::Ref{Float32},
-                dilate_ref::Ref{Float32}, delay_ref::Ref{Float32}, elev::Real,
-                ihtser_ref::Ref{Int32}, gentim_ref::Ref{Float32}, trage_ref::Ref{Float32})
-    hht_ref[] = 0.0f0; emsqr_ref[] = 0.0f0; dilate_ref[] = 1.0f0
-    delay_ref[] = 0.0f0; ihtser_ref[] = Int32(0)
-    gentim_ref[] = 0.0f0; trage_ref[] = 0.0f0
-    return nothing
-end
-
-# ESTIME: determine tally year relative to disturbance date
-function ESTIME(ievtyr_ref::Ref{Int32}, kdt::Integer); return nothing; end
-
-# ESPLT1: plot-level establishment processing for multi-plot runs
-function ESPLT1(args...); return nothing; end
+# ESPLT1 → real implementation in base/esplt.jl
 
 # ---------------------------------------------------------------------------
 # ORGANON extension stub — ORGTAB
@@ -720,4 +690,29 @@ function DBSMIS3(args...); return nothing; end   # dbsmis.f: mistletoe labels
 # ---------------------------------------------------------------------------
 # Establishment printing stub (deferred: establishment extension)
 # ---------------------------------------------------------------------------
-function ESSPRT(args...); return nothing; end    # essprt.f: establishment print (1482 lines)
+# ESSPRT/NSPREC/SPRTHT/ASSPTN → real implementations in base/essprt.jl
+
+# ---------------------------------------------------------------------------
+# Bool overloads for stubs that take Ref{Bool} but are called with Bool
+# (Fortran passes LOGICAL by ref; Julia call sites sometimes use plain Bool)
+# ---------------------------------------------------------------------------
+CLACTV(::Bool)  = nothing
+MISACT(::Bool)  = nothing
+MPBGO(::Bool)   = nothing
+DFBGO(::Bool)   = nothing
+DFBWIN(::Bool)  = nothing
+BWEGO(::Bool)   = nothing
+BWEPPATV(::Bool)= nothing
+DFTMGO(::Bool)  = nothing
+BMLNKD(::Bool)  = nothing
+RRATV(::Bool, ::Bool) = nothing
+BRLNKD(::Bool)  = nothing
+DFBLNKD(::Bool) = nothing
+TMLNKD(::Bool)  = nothing
+MPBLNKD(::Bool) = nothing
+MISINF(::Bool)  = nothing
+MISMRT(::Bool)  = nothing
+RDTRP(::Bool)   = nothing
+RDPPATV(::Bool) = nothing
+ESOUT(::Bool)   = nothing
+GETISPRETENDACTIVE(::Bool) = nothing

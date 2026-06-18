@@ -98,11 +98,11 @@ const _DGBND_DLODHI = Float32[
     20.5, 25.0,    # 90
 ]
 
-function DGBND(ispc::Integer, dbh_val::Real, ddg_ref::Ref{Float32})
+function DGBND(ispc::Integer, dbh_val::Real, ddg_in::Real)::Float32
     i = Int(ispc)
     dlo = _DGBND_DLODHI[2*i - 1]
     dhi = _DGBND_DLODHI[2*i]
-    ddg = ddg_ref[]
+    ddg = Float32(ddg_in)
     d   = Float32(dbh_val)
 
     if d <= dlo
@@ -120,6 +120,10 @@ function DGBND(ispc::Integer, dbh_val::Real, ddg_ref::Ref{Float32})
         if ddg < Float32(0.01); ddg = Float32(0.01); end
     end
 
-    ddg_ref[] = ddg
+    return ddg
+end
+
+function DGBND(ispc::Integer, dbh_val::Real, ddg_ref::Ref{Float32})
+    ddg_ref[] = DGBND(ispc, dbh_val, ddg_ref[])
     return nothing
 end

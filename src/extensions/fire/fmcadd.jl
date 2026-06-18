@@ -11,7 +11,7 @@
 
 function FMCADD()
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCADD", Int32(6), ICYC)
+    debug = DBCHK(false, "FMCADD", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMCADD CYCLE = %2d NYRS=%4d TFMAX=%4d\n",
                 ICYC, NYRS, TFMAX)

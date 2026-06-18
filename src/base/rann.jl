@@ -6,10 +6,13 @@
 # ENTRY RANNGET — export current S0 as Float64
 # ENTRY RANNPUT — import S0 from Float64
 
-function RANN(sel_dummy=nothing)::Float32
+function RANN(sel_ref=nothing)::Float32
     global S1 = mod(Float64(16807) * S0, Float64(2147483647))
     sel = Float32(S1 / Float64(2147483648))
     global S0 = S1
+    # Fortran RANN is a SUBROUTINE that sets its argument; callers using the
+    # RANN(ref) form (BACHLO, HTGSTP, ...) read ref[] afterward, so populate it.
+    sel_ref !== nothing && (sel_ref[] = sel)
     return sel
 end
 

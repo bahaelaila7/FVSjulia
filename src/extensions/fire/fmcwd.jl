@@ -16,7 +16,7 @@ const _FMCWD_SCNV = Float32[0.80f0, 1.00f0]
 
 function FMCWD(iyr::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCWD", Int32(5), ICYC)
+    debug = DBCHK(false, "FMCWD", Int32(5), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMCWD CYCLE = %2d\n", ICYC)
     end
@@ -145,7 +145,7 @@ end
 # CWD1: entry point for fallen snag material → CWD pools
 function CWD1(isng::Integer, dih::Real, disin::Real)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCWD", Int32(5), ICYC)
+    debug = DBCHK(false, "FMCWD", Int32(5), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FM-CWD1 CYCLE = %2d\n", ICYC)
         @printf(io_units[Int32(JOSTND)], " ISNG=%d DIH=%.4f DISIN=%.4f\n", isng, dih, disin)
@@ -176,7 +176,7 @@ end
 # CWD2: entry point for height-reduced snag material (top breakage)
 function CWD2(isng::Integer, dih::Real, disin::Real, oldhth::Real, oldhts::Real)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCWD", Int32(5), ICYC)
+    debug = DBCHK(false, "FMCWD", Int32(5), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FM-CWD2 CYCLE = %2d\n", ICYC)
         @printf(io_units[Int32(JOSTND)], " ISNG=%d DIH=%.4f DISIN=%.4f\n", isng, dih, disin)

@@ -350,7 +350,7 @@ function PUTSTD()
     reals[ 12] = AUTEFF
     reals[ 13] = AVH
     reals[ 14] = BA
-    reals[ 15] = BAA
+    reals[ 15] = BAA_ES
     reals[ 16] = BAALN
     reals[ 17] = BAASQ
     reals[ 18] = BAF
@@ -426,7 +426,7 @@ function PUTSTD()
     reals[ 88] = TFPA
     reals[ 89] = THRES1
     reals[ 90] = THRES2
-    reals[ 91] = TIME
+    reals[ 91] = TIME_ES
     reals[ 92] = TLAT
     reals[ 93] = TPACRE
     reals[ 94] = TPAMIN
@@ -634,11 +634,14 @@ function PUTSTD()
     BFWRIT(WK3, ipnt, ILIMIT, view(REIN,        1:2),         Int32(2),          Int32(2))
     BFWRIT(WK3, ipnt, ILIMIT, view(RELDSP,      1:MAXSP),     Int32(MAXSP),      Int32(2))
     BFWRIT(WK3, ipnt, ILIMIT, view(RHCON,       1:MAXSP),     Int32(MAXSP),      Int32(2))
-    # ROSUM(20,MAXCY1) ↔ IOSUM(22,MAXCY1): write first 20 rows per col as Float32
+    # IOSUM(22,MAXCY1): write all 22 rows per col as Float32. (The Fortran wrote
+    # ROSUM(20,...) equivalenced to IOSUM, a flat-memory window that happened to
+    # cover rows 21-22/SCuFt for early cycles; serialize the full 22 rows so the
+    # NVB SCuFt summary columns round-trip exactly.)
     k_cyc = icyc_p1
     for i in 1:k_cyc
-        rosum_col = reinterpret(Float32, view(IOSUM, 1:20, i))
-        BFWRIT(WK3, ipnt, ILIMIT, rosum_col, Int32(20), Int32(2))
+        rosum_col = reinterpret(Float32, view(IOSUM, 1:22, i))
+        BFWRIT(WK3, ipnt, ILIMIT, rosum_col, Int32(22), Int32(2))
     end
     # RSEED(2) ↔ S0 (Float64): reinterpret 8-byte Float64 as two Float32s
     rseed = reinterpret(Float32, [S0])

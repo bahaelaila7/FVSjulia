@@ -50,9 +50,12 @@ function FILOPN()
         lenkey2 = length(rstrip(kwdfil_api))
         base = kwdfil_api[1:lenkey2]
 
-        # Open main output file (.out)
+        # Open main output file (.out) — don't close if it's still stdout
         if haskey(io_units, JOSTND)
-            close(io_units[JOSTND])
+            prev = io_units[JOSTND]
+            if prev !== stdout && prev !== stderr
+                try close(prev) catch; end
+            end
             delete!(io_units, JOSTND)
         end
         cname = base * ".out"
@@ -79,6 +82,24 @@ function FILOPN()
                     catch; end
                 end
             end
+        end
+
+        # Open summary file (.sum) — primary output that test diffs against
+        if !haskey(io_units, JOSUM)
+            sumname = base * ".sum"
+            try
+                io_units[JOSUM] = restart_code == Int32(0) ? open(sumname, "w") : open(sumname, "a")
+            catch e
+                println("File open error on: $(sumname)")
+            end
+        end
+
+        # Open cheapo/calibstat file (.chp) — written by some keyword handlers
+        if !haskey(io_units, JOSUME)
+            chpname = base * ".chp"
+            try
+                io_units[JOSUME] = restart_code == Int32(0) ? open(chpname, "w") : open(chpname, "a")
+            catch e; end
         end
 
         KEYFN(kwdfil_api)

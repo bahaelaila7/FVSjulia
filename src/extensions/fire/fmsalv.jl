@@ -23,7 +23,7 @@ function FMSALV(iyr::Integer, salvtpa_ref::Ref{Float32})
         HTISSALV[i]   = HTIS[i]
         SPSSALV[i]    = SPS[i]
         DBHSSALV[i]   = DBHS[i]
-        HARDSALV[i]   = HARD[i]
+        HARDSALV[i]   = HARD_FM[i]
         HTDEADSALV[i] = HTDEAD[i]
     end
 
@@ -128,7 +128,7 @@ function FMSALV(iyr::Integer, salvtpa_ref::Ref{Float32})
             # Determine what to cut based on hard/soft eligibility
             local cutdih = 0.0f0
             if DENIH[i] > 0.0f0 &&
-               ((HARD[i] && oksoft != 2) || (!HARD[i] && oksoft != 1))
+               ((HARD_FM[i] && oksoft != 2) || (!HARD_FM[i] && oksoft != 1))
                 cutdih = prop * DENIH[i]
             end
             local cutdis = 0.0f0

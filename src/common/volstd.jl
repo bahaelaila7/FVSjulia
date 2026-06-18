@@ -5,7 +5,7 @@
 LSTATS::Bool = false
 
 # Real scalar
-ALPHA_V::Float32 = Float32(0.0)   # renamed to avoid clash with ALPHA elsewhere
+ALPHA::Float32 = Float32(0.05)
 
 # Per-species arrays
 const IBTRAN  = zeros(Int32, MAXSP)

@@ -30,7 +30,7 @@ const _FMCFMD_XPTS = Float32[
 
 function FMCFMD(iyr::Integer, fmd_ref::Ref{Int32})
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCFMD", Int32(6), ICYC)
+    debug = DBCHK(false, "FMCFMD", Int32(6), ICYC)
     if debug
         @printf(get(io_units, Int32(JOSTND), stdout),
                 " FMCFMD CYCLE= %2d IYR=%5d LUSRFM=%s\n", ICYC, iyr, LUSRFM)
@@ -117,7 +117,8 @@ function FMCFMD(iyr::Integer, fmd_ref::Ref{Int32})
     # Integer tags (IPTR) = model number; ITYP = 0 (normal slope) for all
     local iptr = Int32[1,2,3,4,5,6,7,8,9,10,11,12,13,14]
     local ityp = zeros(Int32, _FMCFMD_ICLSS)
-    local xpts = reshape(_FMCFMD_XPTS, (_FMCFMD_ICLSS, 2))
+    # Fortran fills DATA ((XPTS(I,J),J=1,2),I=1,ICLSS) row-major: xpts[i,1]=x-int, xpts[i,2]=y-int
+    local xpts = permutedims(reshape(_FMCFMD_XPTS, (2, _FMCFMD_ICLSS)))
 
     # Call FMDYN to resolve weights and set FMD (highest-weight model)
     FMDYN(SMALL, LARGE, ityp, xpts, eqwt, iptr, Int32(_FMCFMD_ICLSS), LDYNFM, fmd_ref)

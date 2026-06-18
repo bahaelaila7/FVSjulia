@@ -2,9 +2,11 @@
 # Translated from: bachlo.f (90 lines)
 #
 # Returns a random number from N(xbar, stdev) using the Batchelor composite
-# rejection technique (Tocher 1963).  Uses module-level RANN for uniform draws.
+# rejection technique (Tocher 1963).  The uniform-draw source is the 3rd arg
+# (Fortran BACHLO(XBAR,STDEV,RNFUNC) passes RANN or ESRANN) — establishment
+# height assignment uses ESRANN (the separate seed-55329 RNG), everything else RANN.
 
-function BACHLO(xbar::Real, stdev::Real)
+function BACHLO(xbar::Real, stdev::Real, rng=RANN)
     xbar_f = Float32(xbar)
     stdev_f = Float32(stdev)
     if stdev_f <= Float32(0)
@@ -12,7 +14,7 @@ function BACHLO(xbar::Real, stdev::Real)
     end
     while true
         u = Ref(Float32(0)); r1 = Ref(Float32(0)); r2 = Ref(Float32(0))
-        RANN(u); RANN(r1); RANN(r2)
+        rng(u); rng(r1); rng(r2)
         local x::Float32, z::Float32
         if u[] > Float32(2.0/3.0)
             z_val = Float32(3) * u[] - Float32(2)

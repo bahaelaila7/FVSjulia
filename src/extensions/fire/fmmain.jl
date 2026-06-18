@@ -7,7 +7,7 @@
 
 function FMMAIN()
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMMAIN", Int32(6), ICYC)
+    debug = DBCHK(false, "FMMAIN", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMMAIN CYCLE = %2d LFMON=%s\n",
                 ICYC, LFMON)
@@ -106,7 +106,7 @@ function FMMAIN()
     FMSSUM(Int32(iyr))
     FMPOCR(Int32(iyr), Int32(2))
     if BURNYR == iyr
-        FMCFMD3(Int32(iyr), Int32(fmd))
+        FMCFMD3(Int32(iyr), fmd_ref)
     end
     FMPOFL(Int32(iyr), Int32(fmd), true)
     irtncd_ref = Ref(Int32(0))

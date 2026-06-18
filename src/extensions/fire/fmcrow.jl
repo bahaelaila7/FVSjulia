@@ -21,7 +21,7 @@ const _FMCROW_ISPMAP = Int32[
 
 function FMCROW()
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCROW", Int32(6), ICYC)
+    debug = DBCHK(false, "FMCROW", Int32(6), ICYC)
     if debug
         @printf(get(io_units, Int32(JOSTND), stdout),
                 " ENTERING FMCROW CYCLE = %2d ITRN=%5d\n", ICYC, ITRN)
@@ -32,10 +32,10 @@ function FMCROW()
 
     for i in 1:ITRN
         # Increment post-fire crown regrowth counter; skip tree if crown not yet free
-        if GROW[i] < Float32(1.0)
-            GROW[i] = GROW[i] + Float32(1.0)
+        if GROW_FM[i] < Float32(1.0)
+            GROW_FM[i] = GROW_FM[i] + Float32(1.0)
         end
-        if GROW[i] < Float32(1.0); continue; end
+        if GROW_FM[i] < Float32(1.0); continue; end
 
         local spi::Int32 = _FMCROW_ISPMAP[ISP[i]]
         local d::Float32  = DBH[i]

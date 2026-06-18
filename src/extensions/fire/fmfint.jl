@@ -128,16 +128,17 @@ function FMFINT(iyr::Integer, byram_ref::Ref{Float32}, flame_ref::Ref{Float32},
             if FWG[1, ida] <= 0.0f0; isize[1,3] = ida; isize[1,2] = idb; end
         end
 
-        # Delete large logs from fire spread (MPS >= 16)
+        # Delete large logs (low SAV) from fire spread. fmfint.f 248-253: keep
+        # classes with MPS>=16 (fine, high SAV); at the first coarse log (MPS<16)
+        # set noclas=k-1 and stop. (Was inverted — deleted all fine fuel.)
         for i in 1:2
             local kmax::Int32 = Int32(round(noclas[i]))
             if kmax < 1; continue; end
             for k in 1:Int(kmax)
                 local j::Int32 = isize[i, k]
-                if Float32(MPS[i, j]) >= 16.0f0
-                    noclas[i] = Float32(k - 1)
-                    break
-                end
+                if Float32(MPS[i, j]) >= 16.0f0; continue; end
+                noclas[i] = Float32(k - 1)
+                break
             end
         end
 

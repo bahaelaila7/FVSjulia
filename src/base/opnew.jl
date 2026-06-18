@@ -4,6 +4,12 @@
 # OPNEW returns kode: 0=OK, 1=storage full
 # ENTRY OPMODE → split into separate function OPMODE(lmode)
 
+# 5-arg Fortran-style: OPNEW(kode_r, idt, iactk, nprms, prms) — output kode via Ref
+function OPNEW(kode_r::Ref{Int32}, idt::Int32, iactk::Int32, nprms::Int32, prms::AbstractVector{Float32})
+    kode_r[] = OPNEW(idt, iactk, nprms, prms)
+    return nothing
+end
+
 function OPNEW(idt::Int32, iactk::Int32, nprms::Int32, prms::AbstractVector{Float32})::Int32
     ldeb = DBCHK("OPNEW", ICYC)
 

@@ -26,9 +26,7 @@ function SDICHK()
     end
 
     # SDIMAX carries weighted SDI maximum via SDICAL
-    sdimax_r = Ref(SDIMAX)
-    SDICAL(Int32(0), sdimax_r)
-    global SDIMAX = sdimax_r[]
+    global SDIMAX = SDICAL(Int32(0))
     const_v = SDIMAX / Float32(0.02483133)
     tmd0 = const_v * (dq0^Float32(-1.605))
     if tmd0 > Float32(35000); tmd0 = Float32(35000); end

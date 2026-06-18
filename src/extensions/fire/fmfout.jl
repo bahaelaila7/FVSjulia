@@ -57,13 +57,13 @@ function FMFOUT(iyr::Integer, flame::Real, fmd::Integer, ifire::Integer, cftmp::
             else
                 local fmod_strs = join([@sprintf("%4d%4d", Int(FMOD[k]), Int(round(FWT[k]*100.0f0+0.5f0)))
                                         for k in 1:Int(NFMODS)], "")
-                @printf(jout, "%5d%5d%5.0f%5.0f%5.0f%5.0f%5.0f%6.0f %6.0f%6d%6.1f%7.1f  %-10s%s\n",
+                @printf(jout, "%5d%5d%5.0f%5.0f%5.0f%5.0f%5.0f%6.0f %6.0f %5.1f%6d%7.1f%7.1f  %-10s%s\n",
                     IDBRN, iyr,
                     MOIS[1,1]*100.0f0, MOIS[1,2]*100.0f0, MOIS[1,3]*100.0f0,
                     MOIS[1,4]*100.0f0, MOIS[1,5]*100.0f0,
                     MOIS[2,1]*100.0f0, MOIS[2,2]*100.0f0,
-                    round(Int, FWIND), Int32(floor(FMSLOP*100.0f0)),
-                    flame, SCH, cftmp, fmod_strs)
+                    Float64(FWIND), Int(floor(FMSLOP*100.0f0)),
+                    Float64(flame), Float64(SCH), cftmp, fmod_strs)
             end
         end
     end
@@ -126,11 +126,11 @@ function FMFOUT(iyr::Integer, flame::Real, fmd::Integer, ifire::Integer, cftmp::
                     IDFUL)
         end
 
-        @printf(jout, "%5d %4d %4d   %5.1f %5.1f %6.1f %6.1f %5.1f %5.1f %5.1f %5.1f %6.1f  %3d %3d  %4d  %6.2f %6.2f\n",
-            IDFUL, iyr, Int(EXPOSR),
+        @printf(jout, "%5d %4d %4d   %5.1f %5.1f %6.1f %6.1f %5.1f %5.1f %5.1f %5.1f %5.1f %6.1f  %3d %3d  %4d  %6.2f %6.2f\n",
+            IDFUL, iyr, trunc(Int, EXPOSR),
             BURNED[3,10], BURNED[3,11], suml3, sumg3,
             BURNED[3,4], BURNED[3,5], burng12, blive, BURNCR,
-            bdtot, Int(pduff), Int(pgr3), Int(icrb),
+            bdtot, trunc(Int, pduff), trunc(Int, pgr3), trunc(Int, icrb),
             SMOKE[1], SMOKE[2])
     end
     @label label_252
@@ -209,8 +209,8 @@ function FMFOUT(iyr::Integer, flame::Real, fmd::Integer, ifire::Integer, cftmp::
             local wpos::Int = 2
             for icls in 1:Int(maxcl)
                 if totcls[ksp, icls] > 0.0f0
-                    local knum = Int(clskil[ksp, icls])
-                    local tnum = Int(totcls[ksp, icls])
+                    local knum = round(Int, clskil[ksp, icls])
+                    local tnum = round(Int, totcls[ksp, icls])
                     local seg  = @sprintf("%5d/%5d", knum, tnum)
                     local n = min(length(seg), 91 - wpos)
                     alline = alline[1:wpos-1] * seg[1:n] * alline[wpos+n:end]
@@ -223,11 +223,11 @@ function FMFOUT(iyr::Integer, flame::Real, fmd::Integer, ifire::Integer, cftmp::
             local sp_label = ksp < Int(mxsp1) ? rstrip(JSP[ksp]) : "ALL"
             if lfirst
                 @printf(jout, "%5d %4d  %-3s %s%8.2f%9d\n",
-                        IDMRT, iyr, sp_label, alline, totbak[ksp], Int(totvolk[ksp]))
+                        IDMRT, iyr, sp_label, alline, totbak[ksp], round(Int, totvolk[ksp]))
                 lfirst = false
             else
                 @printf(jout, "%5d       %-3s %s%8.2f%9d\n",
-                        IDMRT, sp_label, alline, totbak[ksp], Int(totvolk[ksp]))
+                        IDMRT, sp_label, alline, totbak[ksp], round(Int, totvolk[ksp]))
             end
         end
     end

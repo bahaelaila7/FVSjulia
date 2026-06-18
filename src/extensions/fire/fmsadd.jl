@@ -99,7 +99,7 @@ function FMSADD(year::Integer, ityp::Integer)
                 DBHS[x]   = 0.0f0
                 HTDEAD[x] = 0.0f0
                 SPS[x]    = Int32(spcl)
-                HARD[x]   = true
+                HARD_FM[x]   = true
                 YRDEAD[x] = Int32(year)
             end
         end

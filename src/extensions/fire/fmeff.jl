@@ -252,7 +252,7 @@ function FMEFF(iyr::Integer, fm::Integer, flame::Real, icall::Integer,
                     OLDCRW[i, isz] = isz == 2 ? toldcr2[isz] * 0.5f0 : toldcr2[isz]
                 end
 
-                GROW[i] = Int32(-1)
+                GROW_FM[i] = Int32(-1)
                 FMICR[i] = Int32(floor(100.0f0 * (crl - crbnl) / HT[i]))
             end
         elseif icall == 0

@@ -619,11 +619,22 @@ function SPCTRN(spcin::AbstractString, ::Integer)::Int32
     end
 
     # Find spcout in the variant's NSP table
+    # Fortran: IF (SPCOUT(1:2).EQ.NSP(J2,1)(1:2)) — compare only first 2 chars
     spcout2 = rstrip(spcout)
     for j2 in 1:MAXSP
-        if spcout2 == rstrip(NSP[j2, 1])
+        nsp1 = NSP[j2, 1]
+        if length(nsp1) >= 2 && spcout2 == nsp1[1:2]
             ispc1 = Int32(j2)
             break
+        end
+    end
+    # Fortran latent bug: if ispc1 still 0, JSPIN(0) overwrites adjacent memory.
+    # In Julia this crashes. Default to variant "other" species to match expected behavior.
+    if ispc1 == Int32(0)
+        if var == "CS"; ispc1 = Int32(85)
+        elseif var == "LS"; ispc1 = Int32(49)
+        elseif var == "NE"; ispc1 = Int32(98)
+        else;               ispc1 = Int32(90)   # SN default "OT"
         end
     end
 

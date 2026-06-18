@@ -6,6 +6,18 @@
 # Returns ISP: 1..MAXSP = single species, 0 = "ALL", <0 = group index, -999 = error
 # Side effects: array[ipos] = Float32(ISP), kard[ipos] = 2-char alpha code
 
+# 8-arg fire calling convention: (ipos, jsp_ref, nsp_col, jostnd, irecnt_ref, keywrd, array, kard)
+function SPDECD(ipos::Int32, jsp_ref::Ref{Int32}, nsp_col::AbstractVector{String},
+                jostnd::Int32, irecnt_ref::Ref{Int32},
+                keywrd::AbstractString, array::Vector{Float32}, kard::Vector{String})
+    # Build 1-column matrix from the species column vector for the 7-arg version
+    m = reshape(collect(nsp_col), length(nsp_col), 1)
+    irecnt = irecnt_ref[]
+    isp = SPDECD(ipos, m, jostnd, irecnt, keywrd, array, kard)
+    jsp_ref[] = isp
+    return nothing
+end
+
 function SPDECD(ipos::Int32, cnsp::Matrix{String}, jostnd::Int32, irecnt::Int32,
                 keywrd::AbstractString, array::Vector{Float32}, kard::Vector{String})::Int32
 
@@ -78,9 +90,10 @@ function SPDECD(ipos::Int32, cnsp::Matrix{String}, jostnd::Int32, irecnt::Int32,
             kard[ipos]  = rpad(temp, 10)[1:10]
             array[ipos] = Float32(isp)
         else
-            # numeric species code in array[ipos]: load alpha code into kard
+            # numeric species code in array[ipos]: load alpha code into kard (Fortran CHARACTER*10)
             isp         = Int32(trunc(array[ipos]))
-            kard[ipos]  = length(cnsp[isp,1]) >= 2 ? cnsp[isp,1][1:2] : cnsp[isp,1]
+            alpha2      = length(cnsp[isp,1]) >= 2 ? cnsp[isp,1][1:2] : rpad(cnsp[isp,1], 2)
+            kard[ipos]  = rpad(alpha2, 10)
         end
     else
         KEYDMP(jostnd, irecnt, keywrd, array, kard)

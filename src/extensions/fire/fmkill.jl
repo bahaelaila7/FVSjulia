@@ -7,7 +7,7 @@
 
 function FMKILL(icall::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMKILL", Int32(6), ICYC)
+    debug = DBCHK(false, "FMKILL", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMKILL CYCLE = %2d LFMON=%s\n",
                 ICYC, LFMON)

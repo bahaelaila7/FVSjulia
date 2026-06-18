@@ -2,7 +2,7 @@
 # Fortran COMMON /ARRAYS/ → module-level globals
 
 # Logical arrays
-const LBIRTH = falses(MAXTRE)          # whether tree age was input
+const LBIRTH = fill(false, Int(MAXTRE))          # whether tree age was input
 
 # Integer arrays
 const DAMSEV   = zeros(Int32, 6, MAXTRE)  # damage severity (6 types x MAXTRE)

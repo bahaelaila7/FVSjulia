@@ -30,7 +30,7 @@ function INITRE()
     irdplv::Int32   = Int32(0)    # plot-level site vars flag for INTREE
     array  = zeros(Float32, 12)
     prms   = zeros(Float32, 10)
-    lnotbk = falses(12)
+    lnotbk = Vector{Bool}(falses(12))
     kard   = fill("          ", 12)   # CHARACTER*10 in Fortran
     keywrd = "        "
     record = repeat(' ', 250)          # CHARACTER*250 in Fortran
@@ -71,7 +71,6 @@ function INITRE()
     @label label_10
     irtncd = fvsGetRtnCode()
     if irtncd != Int32(0); return; end
-
     keywrd, lnotbk, array, irecnt_new, kode, kard, lflag_new =
         KEYRDR(IREAD, JOSTND, debug, lnotbk, array, IRECNT, kode, kard, LFLAG, lkecho)
     global IRECNT = irecnt_new
@@ -115,7 +114,7 @@ function INITRE()
     lnotre = false
     GRINIT()
     OPINIT()
-    RANSED(false, WK6)
+    RANSED(false, WK6[1])
     ESINIT()
     MPBINT()
     DFBINT()
@@ -598,7 +597,7 @@ function INITRE()
             @printf(io_units[JOSTND], "\n%-8s   DATE/CYCLE=%5d; SPECIES=%s (CODE=%3d); CROWN WIDTH MULTIPLIER=%10.4f\n           ONLY TREES GREATER THAN OR EQUAL TO %7.2f AND LESS THAN %7.2f INCHES DBH ARE AFFECTED.\n",
                 keywrd, idt, sp_str, is, array[3], array[4], array[5])
         end
-        kode = OPNEW(idt, Int32(90), Int32(4), array)
+        kode = OPNEW(idt, Int32(90), Int32(4), view(array, 2:5))   # Fortran: OPNEW(...,ARRAY(2))
         if kode > Int32(0); @goto label_10; end
     end
     @goto label_10
@@ -914,7 +913,7 @@ function INITRE()
        !(lnotbk[4] && array[4] == Float32(1.0))
         np = Int32(6)
     end
-    kode = OPNEW(idt, Int32(80), np, array)
+    kode = OPNEW(idt, Int32(80), np, view(array, 2:(1+np)))   # Fortran: OPNEW(...,ARRAY(2))
     if kode > Int32(0); @goto label_10; end
     if lkecho
         @printf(io_units[JOSTND], "\n%-8s   DATE/CYCLE=%5d; DATA SET REFERENCE NUMBER =%4.0f; HEADING SUPPRESSION CODE =%3.0f\n           (0=WITH HEADING, OTHER VALUES=SUPPRESS HEADING).\n",
@@ -3665,7 +3664,7 @@ function INITRE()
     # verified against initre.f lines 5581-5602
     # =======================================================================
     @label label_13100
-    if lnotbk[1]; global ITHNPI = Int32(array[1] + Float32(0.5)); end
+    if lnotbk[1]; global ITHNPI = trunc(Int32, array[1] + Float32(0.5)); end
     if ITHNPI < Int32(0) || ITHNPI > Int32(2)
         KEYDMP(JOSTND, IRECNT, keywrd, array, kard)
         ERRGRO(true, Int32(4))
@@ -4373,7 +4372,7 @@ function INITRE()
     if is == Int32(-999); @goto label_10; end
     if array[7] < Float32(0.0) || array[6] > Float32(0.0); array[7] = Float32(0.0); end
     if array[6] < Float32(0.0); array[6] = Float32(0.0); end
-    kode = OPNEW(idt, ICFLAG, Int32(6), array)
+    kode = OPNEW(idt, ICFLAG, Int32(6), view(array, 2:7))   # Fortran: OPNEW(...,ARRAY(2))
     if kode > Int32(0); @goto label_10; end
     if lkecho
         if ICFLAG == Int32(228)
@@ -4419,7 +4418,7 @@ function INITRE()
     is = SPDECD(Int32(2), NSP, JOSTND, IRECNT, keywrd, array, kard)
     if is == Int32(-999); @goto label_10; end
     if iact == Int32(110) && !lnotbk[6]; array[6] = Float32(1.0); end
-    kode = OPNEW(idt, iact, Int32(6), array)
+    kode = OPNEW(idt, iact, Int32(6), view(array, 2:7))   # Fortran: OPNEW(...,ARRAY(2))
     if kode > Int32(0); @goto label_10; end
     if lkecho
         ilen = Int32(3)

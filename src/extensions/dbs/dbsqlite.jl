@@ -15,10 +15,38 @@ const _dbs_in_db  = Ref{Union{SQLite.DB, Nothing}}(nothing)
 # ---------------------------------------------------------------------------
 # Helper: check if table exists
 function _dbs_table_exists(db::SQLite.DB, tablename::AbstractString)::Bool
-    r = DBInterface.execute(db,
+    # Fully iterate so the cursor is reset/finalized — a half-consumed SELECT
+    # leaves the stmt in SQLITE_ROW state and blocks the next COMMIT
+    # ("cannot commit transaction - SQL statements in progress").
+    found = false
+    for _ in DBInterface.execute(db,
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-        [tablename]) |> first |> r -> get(r, :name, nothing)
-    return r !== nothing
+        [tablename])
+        found = true
+    end
+    return found
+end
+
+# Helper: check if a column exists on a table
+function _dbs_column_exists(db::SQLite.DB, tablename::AbstractString, colname::AbstractString)::Bool
+    # Fully iterate the PRAGMA cursor (same SQLITE_ROW/COMMIT hazard as above).
+    found = false
+    for row in DBInterface.execute(db, "PRAGMA table_info($tablename)")
+        if String(row.name) == colname
+            found = true
+        end
+    end
+    return found
+end
+
+# Helper: add a column only if it is missing. Avoids a "duplicate column" error
+# whose unfinalized failed statement would otherwise block the next COMMIT.
+function _dbs_add_column(db::SQLite.DB, tablename::AbstractString,
+                         colname::AbstractString, coltype::AbstractString)
+    if !_dbs_column_exists(db, tablename, colname)
+        _dbs_exec(db, "ALTER TABLE $tablename ADD COLUMN $colname $coltype")
+    end
+    return nothing
 end
 
 # Helper: execute SQL silently (ignore return value)
@@ -160,10 +188,13 @@ function DBSCASE(iforsure::Integer)
     db = _dbs_out_db[]
     if db === nothing; return nothing; end
 
-    # Generate a UUID CaseID if not already set
-    if isempty(strip(CASEID))
-        global CASEID = UUIDGEN()
+    # If this case was already written (CASEID set), don't insert a duplicate
+    # row — matches dbscase.f:173 "IF (CASEID.NE.'') RETURN". Without this guard
+    # DBSCASE re-inserts FVS_Cases on every per-cycle call.
+    if !isempty(strip(CASEID))
+        return nothing
     end
+    global CASEID = UUIDGEN()
 
     # Create FVS_Cases table if needed
     if !_dbs_table_exists(db, "FVS_Cases")
@@ -306,7 +337,7 @@ function DBSCARBBIOSUMRY()
             dpragbio, dprmrbio, dprcsbio, dprfolbio,
             dpragcrb, dprmrcrb, dprcscrb, dprfolcrb
         ])
-        SQLite.close(stmt)
+        DBInterface.close!(stmt)
 
         if ihrvc == Int32(0); break; end   # no harvest — only one row needed
         # Second pass: row for retained (non-harvested) stand
@@ -364,8 +395,8 @@ function DBSSUMRY(iyear::Integer, iage::Integer, nplt::AbstractString,
               PrdLen int, Acc int, Mort int, MAI real,
               ForTyp int, SizeCls int, StkCls int
             );""")
-        try; _dbs_exec(db, "ALTER TABLE FVS_Summary ADD COLUMN SCuFt int"); catch; end
-        try; _dbs_exec(db, "ALTER TABLE FVS_Summary ADD COLUMN RSCuFt int"); catch; end
+        _dbs_add_column(db, "FVS_Summary", "SCuFt", "int")
+        _dbs_add_column(db, "FVS_Summary", "RSCuFt", "int")
     end
 
     stmt = SQLite.Stmt(db, """
@@ -386,7 +417,7 @@ function DBSSUMRY(iyear::Integer, iage::Integer, nplt::AbstractString,
         Int(iprdlen), Int(iacc), Int(imort), Float64(ymai),
         Int(ifortp), Int(iszcl), Int(istcl)
     ])
-    SQLite.close(stmt)
+    DBInterface.close!(stmt)
     return nothing
 end
 
@@ -516,7 +547,7 @@ function DBSSUMRY2()
             iprdlen, dpacc, dpmort, dpmai,
             ifrtp, Int(ISZCL), Int(ISTCL)
         ])
-        SQLite.close(stmt)
+        DBInterface.close!(stmt)
 
         ihrvc == 0 && break   # no harvest — one row only
 
@@ -639,8 +670,8 @@ function DBS_FIAVBC_ATRTLS()
             ])
         end
     end
+    DBInterface.close!(stmt)   # finalize prepared stmt before COMMIT (SQLite: no statements in progress)
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end
 
@@ -734,8 +765,8 @@ function DBS_FIAVBC_CUTLST()
             ])
         end
     end
+    DBInterface.close!(stmt)   # finalize prepared stmt before COMMIT (SQLite: no statements in progress)
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end
 
@@ -879,6 +910,77 @@ function DBSIN(keywrd_in::AbstractString, array::AbstractVector{Float32},
             global IVBCATRLST = Int32(1)
             if lkecho; @printf(io, "\n%-8s   FIAVBC_ATRLIST SENT TO DATABASE (REQUIRES FIAVBC KEYWORD).\n", keywrd); end
 
+        elseif num == Int32(13)      # POTFIRDB — FVS_PotFire_East + FVS_PotFire_Cond
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IPOTFIRE = Int32(1); global IPOTFIREC = Int32(1)
+                if lkecho; @printf(io, "\n%-8s   POTENTIAL FIRE REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(14)      # FUELSOUT — FVS_Fuels
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IFUELS = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   ALL FUELS REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(19)      # FUELREDB — FVS_Consumption
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IFUELC = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   FUEL CONSUMPTION REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(20)      # BURNREDB — FVS_BurnReport
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IBURN = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   BURN CONDITIONS REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(21)      # MORTREDB — FVS_Mortality
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IMORTF = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   FIRE MORTALITY REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(22)      # SNAGSUDB — FVS_SnagSum
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global ISSUM = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   SNAG SUMMARY REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(29)      # CARBREDB — FVS_Carbon + FVS_Hrv_Carbon
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global ICMRPT = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                global ICHRPT = ICMRPT
+                if lkecho; @printf(io, "\n%-8s   CARBON REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(30)      # ECONRPTS — FVS_EconSummary (+ FVS_EconHarvestValue)
+            global IDBSECON = Int32(2)
+            global ISPOUT30 = Int32(0)
+            if lnb[1] && Int(round(kw_arr[1])) == 1; global IDBSECON = Int32(1); end
+            if lnb[2] && kw_arr[2] > Float32(0); global ISPOUT30 = Int32(round(kw_arr[2])); end
+            if lkecho; @printf(io, "\n%-8s   ECON REPORTS SENT TO SPECIFIED DATABASE.\n", keywrd); end
+
+        elseif num == Int32(32)      # DWDVLDB — FVS_Down_Wood_Vol
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IDWDVOL = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   DOWN WOOD VOLUME REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
+        elseif num == Int32(33)      # DWDCVDB — FVS_Down_Wood_Cov
+            local lact = Ref(false); FMLNKD(lact)
+            if lact[]
+                global IDWDCOV = (lnb[1] && kw_arr[1] > Float32(1)) ? Int32(2) : Int32(1)
+                if lkecho; @printf(io, "\n%-8s   DOWN WOOD COVER REPORT SENT TO DATABASE.\n", keywrd); end
+            else; ERRGRO(true, Int32(11)); end
+
         else
             # Unhandled DBS keyword — skip
             if lkecho; @printf(io, "\n%-8s   (DBS OPTION NOT YET TRANSLATED; IGNORED)\n", keywrd); end
@@ -954,14 +1056,26 @@ function DBSFMCRPT(iyear::Integer, nplt::AbstractString,
         vals[1], vals[2], vals[3], vals[4], vals[5],
         vals[6], vals[7], vals[8], vals[9], vals[10], vals[11]
     ])
-    SQLite.close(stmt)
+    DBInterface.close!(stmt)
     return nothing
 end
 
 # ---------------------------------------------------------------------------
-# DBSERROR: report DBS error (stub)
+# DBSERROR: write an error/warning message to FVS_Error (from dbserror.f).
+# Called from ERRGRO. No gating flag — writes whenever the output DB is open.
 # ---------------------------------------------------------------------------
-function DBSERROR(args...); return nothing; end
+function DBSERROR(nplt::AbstractString, cmsg::AbstractString)
+    DBSCASE(Int32(1))
+    db = _dbs_out_db[]
+    db === nothing && return nothing
+    if !_dbs_table_exists(db, "FVS_Error")
+        _dbs_exec(db, "CREATE TABLE FVS_Error (CaseID text not null,StandID text not null,Message text);")
+    end
+    stmt = SQLite.Stmt(db, "INSERT INTO FVS_Error (CaseID,StandID,Message) VALUES (?,?,?)")
+    DBInterface.execute(stmt, Any[CASEID, rstrip(nplt), rstrip(cmsg)])
+    DBInterface.close!(stmt)
+    return nothing
+end
 
 # ---------------------------------------------------------------------------
 # DBSPRS: tokenizer — returns text before first DELIMSTR, advances SOURCE past it.
@@ -1116,7 +1230,7 @@ function DBSCALIB(icfrom::Integer, cortem::AbstractVector{Float32},
                 ispec, rstrip(csp1), rstrip(csp2), rstrip(csp3),
                 Int(numcal[k]), dcortem, dstdrat, dwci, rcormult
             ])
-            SQLite.close(stmt)
+            DBInterface.close!(stmt)
         else
             rcormult = dcortem
             stmt = SQLite.Stmt(db, insert_sql)
@@ -1125,7 +1239,7 @@ function DBSCALIB(icfrom::Integer, cortem::AbstractVector{Float32},
                 ispec, rstrip(csp1), rstrip(csp2), rstrip(csp3),
                 Int(numcal[k]), dcortem, missing, missing, rcormult
             ])
-            SQLite.close(stmt)
+            DBInterface.close!(stmt)
         end
     end
     _dbs_exec(db, "COMMIT;")
@@ -1184,14 +1298,15 @@ function DBSREFERENCE()
         DBInterface.execute(stmt, [
             CASEID, rstrip(NPLT),
             i, rstrip(JSP[i]), rstrip(PLNJSP[i]), rstrip(FIAJSP[i]),
-            sditype, Int(round(SDIDEF[i])), Int(round(SITEAR[i])),
+            sditype, Int(round(SDIDEF[i], RoundNearestTiesAway)),
+            Int(round(SITEAR[i], RoundNearestTiesAway)),   # Fortran NINT = ties away from zero
             cruisetype, rstrip(VEQNNC[i]),
             Float64(DBHMIN[i]), Float64(TOPD[i]), Float64(STMP[i]),
             Float64(SCFMIND[i]), Float64(SCFTOPD[i]), Float64(SCFSTMP[i]),
             rstrip(VEQNNB[i]),
             Float64(BFMIND[i]), Float64(BFTOPD[i]), Float64(BFSTMP[i])
         ])
-        SQLite.close(stmt)
+        DBInterface.close!(stmt)
     end
     return nothing
 end
@@ -1233,7 +1348,7 @@ function DBSSITEPREP(noyear::Integer, mechyear::Integer, burnyear::Integer,
     catch
         global IREG2 = Int32(0)
     end
-    SQLite.close(stmt)
+    DBInterface.close!(stmt)
     return nothing
 end
 
@@ -1292,7 +1407,7 @@ function DBSSTATS(sp::AbstractString, tpa::Real, ba::Real, cf::Real, bf::Real,
         catch
             global ISTATS1 = Int32(0)
         end
-        SQLite.close(stmt)
+        DBInterface.close!(stmt)
     else
         ISTATS2 != Int32(1) && return nothing
         if !_dbs_table_exists(db, "FVS_Stats_Stand")
@@ -1330,7 +1445,7 @@ function DBSSTATS(sp::AbstractString, tpa::Real, ba::Real, cf::Real, bf::Real,
         catch
             global ISTATS2 = Int32(0)
         end
-        SQLite.close(stmt)
+        DBInterface.close!(stmt)
     end
     return nothing
 end
@@ -1443,7 +1558,7 @@ function DBSSTRCLASS(iyear::Integer, cnplt::AbstractString, rcode::Integer,
     catch
         global ISTRCLAS = Int32(0)
     end
-    SQLite.close(stmt)
+    DBInterface.close!(stmt)
     return nothing
 end
 
@@ -1481,9 +1596,7 @@ function DBSCMPU()
     else
         for i in 1:itst5
             if include_var[i]
-                try
-                    _dbs_exec(db, "ALTER TABLE $tablename ADD COLUMN $(strip(CTSTV5[i])) real null;")
-                catch; end
+                _dbs_add_column(db, tablename, strip(CTSTV5[i]), "real null")
             end
         end
     end
@@ -1614,20 +1727,328 @@ end
 # the respective extensions are translated.
 # ---------------------------------------------------------------------------
 function DBSTALLY(args...); return nothing; end        # dbstally.f: regeneration tally
-function DBSFUELS(args...); return nothing; end        # dbsfuels.f: fire fuels report
-function DBSFMBURN(args...); return nothing; end       # dbsfmburn.f: fire burn summary
+# Helper: create a DBS table from a column spec if missing, then INSERT one row.
+# cols/vals are parallel; CaseID/StandID/Year handled by the caller's column list.
+function _dbs_write_row(table::AbstractString, createcols::AbstractString,
+                        colnames::AbstractString, vals::AbstractVector)
+    DBSCASE(Int32(1))
+    db = _dbs_out_db[]
+    db === nothing && return false
+    if !_dbs_table_exists(db, table)
+        _dbs_exec(db, "CREATE TABLE $table ($createcols);")
+    end
+    qs = join(fill("?", length(vals)), ",")
+    stmt = SQLite.Stmt(db, "INSERT INTO $table ($colnames) VALUES ($qs)")
+    DBInterface.execute(stmt, vals)
+    DBInterface.close!(stmt)
+    return true
+end
+
+# dbsfuels.f → FVS_Fuels (19 fuel components)
+function DBSFUELS(iyear, nplt, litter, duff, sdlt3, sdge3, sd3to6, sd6to12,
+                  sdge12, herb, shrub, surftot, snaglt3, snagge3, foliage,
+                  standlt3, standge3, standtot, biomass, consumed, removed, kode_ref)
+    IFUELS == Int32(0) && return nothing
+    IFUELS == Int32(2) && (kode_ref[] = Int32(0))
+    _dbs_write_row("FVS_Fuels",
+        "CaseID text not null,StandID text not null,Year int null," *
+        "Surface_Litter real,Surface_Duff real,Surface_lt3 real,Surface_ge3 real," *
+        "Surface_3to6 real,Surface_6to12 real,Surface_ge12 real,Surface_Herb real," *
+        "Surface_Shrub real,Surface_Total real,Standing_Snag_lt3 real,Standing_Snag_ge3 real," *
+        "Standing_Foliage real,Standing_Live_lt3 real,Standing_Live_ge3 real,Standing_Total real," *
+        "Total_Biomass int,Total_Consumed int,Biomass_Removed int",
+        "CaseID,StandID,Year,Surface_Litter,Surface_Duff,Surface_lt3,Surface_ge3," *
+        "Surface_3to6,Surface_6to12,Surface_ge12,Surface_Herb,Surface_Shrub,Surface_Total," *
+        "Standing_Snag_lt3,Standing_Snag_ge3,Standing_Foliage,Standing_Live_lt3," *
+        "Standing_Live_ge3,Standing_Total,Total_Biomass,Total_Consumed,Biomass_Removed",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            Float64(litter), Float64(duff), Float64(sdlt3), Float64(sdge3),
+            Float64(sd3to6), Float64(sd6to12), Float64(sdge12), Float64(herb),
+            Float64(shrub), Float64(surftot), Float64(snaglt3), Float64(snagge3),
+            Float64(foliage), Float64(standlt3), Int(standge3), Int(standtot),
+            Int(biomass), Int(consumed), Int(removed)])
+    return nothing
+end
+
+# dbsfmburn.f → FVS_BurnReport
+function DBSFMBURN(iyear, nplt, m1, m10, m100, m1000, mduff, mwoody, mherb,
+                   wind, slope, flame, scorch, ftype, fmod, fwt, kode_ref)
+    IBURN == Int32(0) && return nothing
+    IBURN == Int32(2) && (kode_ref[] = Int32(0))
+    fm(i) = (length(fmod) >= i ? Int(fmod[i]) : 0)
+    # Fortran dbsfmburn.f:149 stores weight as a rounded percent: INT(WT*100+0.5)
+    fw(i) = (length(fwt)  >= i ? Float64(round(Int, fwt[i] * 100.0f0)) : 0.0)
+    _dbs_write_row("FVS_BurnReport",
+        "CaseID text not null,StandID text not null,Year int," *
+        "One_Hr_Moisture real,Ten_Hr_Moisture real,Hundred_Hr_Moisture real," *
+        "Thousand_Hr_Moisture real,Duff_Moisture real,Live_Woody_Moisture real," *
+        "Live_Herb_Moisture real,Midflame_Wind real,Slope int,Flame_length real," *
+        "Scorch_height real,Fire_Type text,FuelModl1 int,Weight1 real,FuelModl2 int," *
+        "Weight2 real,FuelModl3 int,Weight3 real,FuelModl4 int,Weight4 real",
+        "CaseID,StandID,Year,One_Hr_Moisture,Ten_Hr_Moisture,Hundred_Hr_Moisture," *
+        "Thousand_Hr_Moisture,Duff_Moisture,Live_Woody_Moisture,Live_Herb_Moisture," *
+        "Midflame_Wind,Slope,Flame_length,Scorch_height,Fire_Type,FuelModl1,Weight1," *
+        "FuelModl2,Weight2,FuelModl3,Weight3,FuelModl4,Weight4",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            Float64(m1), Float64(m10), Float64(m100), Float64(m1000), Float64(mduff),
+            Float64(mwoody), Float64(mherb), Float64(wind), Int(slope), Float64(flame),
+            Float64(scorch), rstrip(String(ftype)),
+            fm(1), fw(1), fm(2), fw(2), fm(3), fw(3), fm(4), fw(4)])
+    return nothing
+end
+
+# dbsfmfuel.f → FVS_Consumption
+function DBSFMFUEL(iyear, nplt, expos, conlit, conduff, conlt3, conge3, con3to6,
+                   con6to12, conge12, conhs, concr, contot, pduff, pge3, pcrown,
+                   smoke25, smoke10, kode_ref)
+    IFUELC == Int32(0) && return nothing
+    IFUELC == Int32(2) && (kode_ref[] = Int32(0))
+    _dbs_write_row("FVS_Consumption",
+        "CaseID text not null,StandID text not null,Year int null," *
+        "Min_Soil_Exp real,Litter_Consumption real,Duff_Consumption real," *
+        "Consumption_lt3 real,Consumption_ge3 real,Consumption_3to6 real," *
+        "Consumption_6to12 real,Consumption_ge12 real,Consumption_Herb_Shrub real," *
+        "Consumption_Crowns real,Total_Consumption real,Percent_Consumption_Duff real," *
+        "Percent_Consumption_ge3 real,Percent_Trees_Crowning int,Smoke_Production_25 real," *
+        "Smoke_Production_10 real",
+        "CaseID,StandID,Year,Min_Soil_Exp,Litter_Consumption,Duff_Consumption," *
+        "Consumption_lt3,Consumption_ge3,Consumption_3to6,Consumption_6to12," *
+        "Consumption_ge12,Consumption_Herb_Shrub,Consumption_Crowns,Total_Consumption," *
+        "Percent_Consumption_Duff,Percent_Consumption_ge3,Percent_Trees_Crowning," *
+        "Smoke_Production_25,Smoke_Production_10",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            Float64(expos), Float64(conlit), Float64(conduff), Float64(conlt3),
+            Float64(conge3), Float64(con3to6), Float64(con6to12), Float64(conge12),
+            Float64(conhs), Float64(concr), Float64(contot), Float64(pduff),
+            Float64(pge3), Int(pcrown), Float64(smoke25), Float64(smoke10)])
+    return nothing
+end
+
+# dbsfmmort.f → FVS_Mortality (one row per species with kills + an "ALL" total row)
+function DBSFMMORT(iyear, clskil, totcls, totbak, totvolk, kode_ref)
+    IMORTF == Int32(0) && return nothing
+    IMORTF == Int32(2) && (kode_ref[] = Int32(0))
+    DBSCASE(Int32(1))
+    db = _dbs_out_db[]
+    db === nothing && return nothing
+    tbl = "FVS_Mortality"
+    if !_dbs_table_exists(db, tbl)
+        _dbs_exec(db, "CREATE TABLE $tbl (CaseID text not null,StandID text not null," *
+            "Year int null,SpeciesFVS text,SpeciesPLANTS text,SpeciesFIA text," *
+            "Killed_class1 real,Total_class1 real,Killed_class2 real,Total_class2 real," *
+            "Killed_class3 real,Total_class3 real,Killed_class4 real,Total_class4 real," *
+            "Killed_class5 real,Total_class5 real,Killed_class6 real,Total_class6 real," *
+            "Bakill real,Volkill real);")
+    end
+    local mxsp1 = size(totcls, 1)
+    local totcol = size(totcls, 2)   # last column = total over classes
+    cols = "CaseID,StandID,Year,SpeciesFVS,SpeciesPLANTS,SpeciesFIA," *
+        "Killed_class1,Total_class1,Killed_class2,Total_class2,Killed_class3,Total_class3," *
+        "Killed_class4,Total_class4,Killed_class5,Total_class5,Killed_class6,Total_class6,Bakill,Volkill"
+    for j in 1:mxsp1
+        totcls[j, totcol] <= 0.0f0 && continue
+        sp1, sp2, sp3 = j == mxsp1 ? ("ALL", "ALL", "ALL") :
+                        (rstrip(JSP[j]), rstrip(PLNJSP[j]), rstrip(FIAJSP[j]))
+        stmt = SQLite.Stmt(db, "INSERT INTO $tbl ($cols) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        DBInterface.execute(stmt, Any[CASEID, rstrip(NPLT), Int(iyear), sp1, sp2, sp3,
+            Float64(clskil[j,1]), Float64(totcls[j,1]), Float64(clskil[j,2]), Float64(totcls[j,2]),
+            Float64(clskil[j,3]), Float64(totcls[j,3]), Float64(clskil[j,4]), Float64(totcls[j,4]),
+            Float64(clskil[j,5]), Float64(totcls[j,5]), Float64(clskil[j,6]), Float64(totcls[j,6]),
+            Float64(totbak[j]), Float64(totvolk[j])])
+        DBInterface.close!(stmt)
+    end
+    return nothing
+end
+
+# dbsfmpf.f → FVS_PotFire_East (one row per call)
+function DBSFMPF(iyear, flsev, flmod, canht, cande, mbasev, mbamod, mvolsev,
+                 mvolmod, smksev, smkmod,
+                 fmod_mod=Int32[0,0,0,0], fwt_mod=Float32[0,0,0,0],
+                 fmod_sev=Int32[0,0,0,0], fwt_sev=Float32[0,0,0,0])
+    IPOTFIRE == Int32(0) && return nothing
+    # Fuel weights stored as percent: INT(WT*100 + 0.5)  (dbsfmpf.f:231-240)
+    pct(v) = Float64(round(Int, Float64(v) * 100.0))
+    fm(v, i) = Int(i <= length(v) ? v[i] : 0)
+    _dbs_write_row("FVS_PotFire_East",
+        "CaseID text not null,StandID text not null,Year int," *
+        "Flame_Len_Sev real,Flame_Len_Mod real,Canopy_Ht int,Canopy_Density real," *
+        "Mortality_BA_Sev real,Mortality_BA_Mod real,Mortality_VOL_Sev real,Mortality_VOL_Mod real," *
+        "Pot_Smoke_Sev real,Pot_Smoke_Mod real," *
+        "Fuel_Mod1_Sev int,Fuel_Mod2_Sev int,Fuel_Mod3_Sev int,Fuel_Mod4_Sev int," *
+        "Fuel_Wt1_Sev real,Fuel_Wt2_Sev real,Fuel_Wt3_Sev real,Fuel_Wt4_Sev real," *
+        "Fuel_Mod1_Mod int,Fuel_Mod2_Mod int,Fuel_Mod3_Mod int,Fuel_Mod4_Mod int," *
+        "Fuel_Wt1_Mod real,Fuel_Wt2_Mod real,Fuel_Wt3_Mod real,Fuel_Wt4_Mod real",
+        "CaseID,StandID,Year,Flame_Len_Sev,Flame_Len_Mod,Canopy_Ht,Canopy_Density," *
+        "Mortality_BA_Sev,Mortality_BA_Mod,Mortality_VOL_Sev,Mortality_VOL_Mod," *
+        "Pot_Smoke_Sev,Pot_Smoke_Mod," *
+        "Fuel_Mod1_Sev,Fuel_Mod2_Sev,Fuel_Mod3_Sev,Fuel_Mod4_Sev," *
+        "Fuel_Wt1_Sev,Fuel_Wt2_Sev,Fuel_Wt3_Sev,Fuel_Wt4_Sev," *
+        "Fuel_Mod1_Mod,Fuel_Mod2_Mod,Fuel_Mod3_Mod,Fuel_Mod4_Mod," *
+        "Fuel_Wt1_Mod,Fuel_Wt2_Mod,Fuel_Wt3_Mod,Fuel_Wt4_Mod",
+        Any[CASEID, rstrip(NPLT), Int(iyear),
+            Float64(flsev), Float64(flmod), Int(round(canht)), Float64(cande),
+            Float64(mbasev), Float64(mbamod), Float64(mvolsev), Float64(mvolmod),
+            Float64(smksev), Float64(smkmod),
+            fm(fmod_sev,1), fm(fmod_sev,2), fm(fmod_sev,3), fm(fmod_sev,4),
+            pct(fwt_sev[1]), pct(fwt_sev[2]), pct(fwt_sev[3]), pct(fwt_sev[4]),
+            fm(fmod_mod,1), fm(fmod_mod,2), fm(fmod_mod,3), fm(fmod_mod,4),
+            pct(fwt_mod[1]), pct(fwt_mod[2]), pct(fwt_mod[3]), pct(fwt_mod[4])])
+    return nothing
+end
+
+# dbsfmpfc.f → FVS_PotFire_Cond (one row per wind/moisture scenario)
+# kode 1 → "Severe", 2 → "Moderate"
+function DBSFMPFC(nplt::AbstractString, windsp::Real, temp::Integer,
+                  m1::Real, m2::Real, m3::Real, m4::Real, m5::Real, m6::Real, m7::Real,
+                  kode::Integer)
+    IPOTFIREC == Int32(0) && return nothing
+    fcond = kode == 1 ? "Severe" : "Moderate"
+    _dbs_write_row("FVS_PotFire_Cond",
+        "CaseID text not null,StandID text not null,Fire_Condition text," *
+        "Wind_Speed real,Temperature int,One_Hr_Moisture real,Ten_Hr_Moisture real," *
+        "Hundred_Hr_Moisture real,Thousand_Hr_Moisture real,Duff_Moisture real," *
+        "Live_Woody_Moisture real,Live_Herb_Moisture real",
+        "CaseID,StandID,Fire_Condition,Wind_Speed,Temperature,One_Hr_Moisture," *
+        "Ten_Hr_Moisture,Hundred_Hr_Moisture,Thousand_Hr_Moisture,Duff_Moisture," *
+        "Live_Woody_Moisture,Live_Herb_Moisture",
+        Any[CASEID, rstrip(nplt), fcond, Float64(windsp), Int(temp),
+            Float64(m1), Float64(m2), Float64(m3), Float64(m4),
+            Float64(m5), Float64(m6), Float64(m7)])
+    return nothing
+end
+
+# dbsfmssnag.f → FVS_SnagSum
+function DBSFMSSNAG(iyear, nplt, h1, h2, h3, h4, h5, h6, h7,
+                    s1, s2, s3, s4, s5, s6, s7, hstot, kode)
+    ISSUM == Int32(0) && return nothing
+    _dbs_write_row("FVS_SnagSum",
+        "CaseID text not null,StandID text not null,Year int null," *
+        "Hard_snags_class1 real,Hard_snags_class2 real,Hard_snags_class3 real," *
+        "Hard_snags_class4 real,Hard_snags_class5 real,Hard_snags_class6 real," *
+        "Soft_snags_class1 real,Soft_snags_class2 real,Soft_snags_class3 real," *
+        "Soft_snags_class4 real,Soft_snags_class5 real,Soft_snags_class6 real," *
+        "Hard_soft_snags_total real",
+        "CaseID,StandID,Year,Hard_snags_class1,Hard_snags_class2,Hard_snags_class3," *
+        "Hard_snags_class4,Hard_snags_class5,Hard_snags_class6,Soft_snags_class1," *
+        "Soft_snags_class2,Soft_snags_class3,Soft_snags_class4,Soft_snags_class5," *
+        "Soft_snags_class6,Hard_soft_snags_total",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            Float64(h1), Float64(h2), Float64(h3), Float64(h4), Float64(h5), Float64(h6),
+            Float64(s1), Float64(s2), Float64(s3), Float64(s4), Float64(s5), Float64(s6),
+            Float64(hstot)])
+    return nothing
+end
+
+# dbsfmdwvol.f → FVS_Down_Wood_Vol (8 hard + 8 soft from a length-16 vector)
+function DBSFMDWVOL(iyear, nplt, v, vdim, kode_ref)
+    IDWDVOL == Int32(0) && return nothing
+    IDWDVOL == Int32(2) && (kode_ref[] = Int32(0))
+    g(i) = (length(v) >= i ? Float64(v[i]) : 0.0)
+    _dbs_write_row("FVS_Down_Wood_Vol",
+        "CaseID text not null,StandID text not null,Year int null," *
+        "DWD_Volume_0to3_Hard real,DWD_Volume_3to6_Hard real,DWD_Volume_6to12_Hard real," *
+        "DWD_Volume_12to20_Hard real,DWD_Volume_20to35_Hard real,DWD_Volume_35to50_Hard real," *
+        "DWD_Volume_ge_50_Hard real,DWD_Volume_Total_Hard real," *
+        "DWD_Volume_0to3_Soft real,DWD_Volume_3to6_Soft real,DWD_Volume_6to12_Soft real," *
+        "DWD_Volume_12to20_Soft real,DWD_Volume_20to35_Soft real,DWD_Volume_35to50_Soft real," *
+        "DWD_Volume_ge_50_Soft real,DWD_Volume_Total_Soft real",
+        "CaseID,StandID,Year,DWD_Volume_0to3_Hard,DWD_Volume_3to6_Hard,DWD_Volume_6to12_Hard," *
+        "DWD_Volume_12to20_Hard,DWD_Volume_20to35_Hard,DWD_Volume_35to50_Hard,DWD_Volume_ge_50_Hard," *
+        "DWD_Volume_Total_Hard,DWD_Volume_0to3_Soft,DWD_Volume_3to6_Soft,DWD_Volume_6to12_Soft," *
+        "DWD_Volume_12to20_Soft,DWD_Volume_20to35_Soft,DWD_Volume_35to50_Soft,DWD_Volume_ge_50_Soft," *
+        "DWD_Volume_Total_Soft",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8),
+            g(9), g(10), g(11), g(12), g(13), g(14), g(15), g(16)])
+    return nothing
+end
+
+# dbsfmdwcov.f → FVS_Down_Wood_Cov (7 hard + 7 soft from a length-14 vector)
+function DBSFMDWCOV(iyear, nplt, v, vdim, kode_ref)
+    IDWDCOV == Int32(0) && return nothing
+    IDWDCOV == Int32(2) && (kode_ref[] = Int32(0))
+    g(i) = (length(v) >= i ? Float64(v[i]) : 0.0)
+    _dbs_write_row("FVS_Down_Wood_Cov",
+        "CaseID text not null,StandID text not null,Year int null," *
+        "DWD_Cover_3to6_Hard real,DWD_Cover_6to12_Hard real,DWD_Cover_12to20_Hard real," *
+        "DWD_Cover_20to35_Hard real,DWD_Cover_35to50_Hard real,DWD_Cover_ge_50_Hard real," *
+        "DWD_Cover_Total_Hard real,DWD_Cover_3to6_Soft real,DWD_Cover_6to12_Soft real," *
+        "DWD_Cover_12to20_Soft real,DWD_Cover_20to35_Soft real,DWD_Cover_35to50_Soft real," *
+        "DWD_Cover_ge_50_Soft real,DWD_Cover_Total_Soft real",
+        "CaseID,StandID,Year,DWD_Cover_3to6_Hard,DWD_Cover_6to12_Hard,DWD_Cover_12to20_Hard," *
+        "DWD_Cover_20to35_Hard,DWD_Cover_35to50_Hard,DWD_Cover_ge_50_Hard,DWD_Cover_Total_Hard," *
+        "DWD_Cover_3to6_Soft,DWD_Cover_6to12_Soft,DWD_Cover_12to20_Soft,DWD_Cover_20to35_Soft," *
+        "DWD_Cover_35to50_Soft,DWD_Cover_ge_50_Soft,DWD_Cover_Total_Soft",
+        Any[CASEID, rstrip(nplt), Int(iyear),
+            g(1), g(2), g(3), g(4), g(5), g(6), g(7),
+            g(8), g(9), g(10), g(11), g(12), g(13), g(14)])
+    return nothing
+end
+
+# dbsfmhrpt.f → FVS_Hrv_Carbon (6 carbon-fate components)
+function DBSFMHRPT(iyear, nplt, v, vdim, kode_ref)
+    ICHRPT == Int32(0) && return nothing
+    ICHRPT == Int32(2) && (kode_ref[] = Int32(0))
+    g(i) = (length(v) >= i ? Float64(v[i]) : 0.0)
+    _dbs_write_row("FVS_Hrv_Carbon",
+        "CaseID text not null,StandID text not null,Year int," *
+        "Products real,Landfill real,Energy real,Emissions real," *
+        "Merch_Carbon_Stored real,Merch_Carbon_Removed real",
+        "CaseID,StandID,Year,Products,Landfill,Energy,Emissions," *
+        "Merch_Carbon_Stored,Merch_Carbon_Removed",
+        Any[CASEID, rstrip(nplt), Int(iyear), g(1), g(2), g(3), g(4), g(5), g(6)])
+    return nothing
+end
+
 function DBSFMDSNAG(args...); return nothing; end      # dbsfmdsnag.f: fire dead snag output
-function DBSFMMORT(args...); return nothing; end       # dbsfmmort.f: fire mortality summary
-function DBSFMPF(args...); return nothing; end         # dbsfmpf.f: fire potential flame
-function DBSFMSSNAG(args...); return nothing; end      # dbsfmssnag.f: fire surface snag
-function DBSECHARV(args...); return nothing; end       # dbsecharv.f: economics harvest
-function DBSECSUM(args...); return nothing; end        # dbsecsum.f: economics summary
+# dbsecsum.f → FVS_EconSummary (one row per investment period).
+# Costs/revenues bind only when >= 0; IRR/BC/RRR/SEV/forest/repro bind only when
+# their *Calculated flag is true (else NULL) — matching the Fortran.
+function DBSECSUM(stdid, beginAnalYear, period, pretend,
+                  costUndisc, revUndisc, costDisc, revDisc, pnv,
+                  irr, irrCalc, bcRatio, bcCalc, rrr, rrrCalc, sev, sevCalc,
+                  forestValue, fvCalc, reprodValue, rvCalc,
+                  ft3Volume, bfVolume, discountRate, sevInput, sevInputUsed)
+    IDBSECON == Int32(0) && return nothing
+    nn(c, v) = c ? Float64(v) : missing
+    _dbs_write_row("FVS_EconSummary",
+        "CaseID text not null,StandID text not null,Year int null,Period int null," *
+        "Pretend_Harvest text null,Undiscounted_Cost real null,Undiscounted_Revenue real null," *
+        "Discounted_Cost real null,Discounted_Revenue real null,PNV real null,IRR real null," *
+        "BC_Ratio real null,RRR real null,SEV real null,Value_of_Forest real null," *
+        "Value_of_Trees real null,Mrch_Cubic_Volume int null,Mrch_BoardFoot_Volume int null," *
+        "Discount_Rate real null,Given_SEV real null",
+        "CaseID,StandID,Year,Period,Pretend_Harvest,Undiscounted_Cost,Undiscounted_Revenue," *
+        "Discounted_Cost,Discounted_Revenue,PNV,IRR,BC_Ratio,RRR,SEV,Value_of_Forest," *
+        "Value_of_Trees,Mrch_Cubic_Volume,Mrch_BoardFoot_Volume,Discount_Rate,Given_SEV",
+        Any[CASEID, rstrip(stdid), Int(beginAnalYear), Int(period), pretend,
+            nn(costUndisc >= 0, costUndisc), nn(revUndisc >= 0, revUndisc),
+            nn(costDisc >= 0, costDisc), nn(revDisc >= 0, revDisc), Float64(pnv),
+            nn(irrCalc, irr), nn(bcCalc, bcRatio), nn(rrrCalc, rrr), nn(sevCalc, sev),
+            nn(fvCalc, forestValue), nn(rvCalc, reprodValue),
+            Int(ft3Volume), Int(bfVolume), Float64(discountRate),
+            nn(sevInputUsed, sevInput)])
+    return nothing
+end
+
+# dbsecharv.f → FVS_EconHarvestValue. DBSECHARV_open creates the (here empty) table.
+function DBSECHARV_open()
+    IDBSECON == Int32(0) && return nothing
+    DBSCASE(Int32(1))
+    db = _dbs_out_db[]
+    db === nothing && return nothing
+    if !_dbs_table_exists(db, "FVS_EconHarvestValue")
+        _dbs_exec(db, "CREATE TABLE FVS_EconHarvestValue (" *
+            "CaseID text not null,Year int not null,SpeciesFVS text null," *
+            "SpeciesPLANTS text not null,SpeciesFIA text null,Min_DIB real null," *
+            "Max_DIB real null,Min_DBH real null,Max_DBH real null,TPA_Removed int null," *
+            "TPA_Value int null,Tons_Per_Acre int null,Ft3_Removed int null,Ft3_Value int null," *
+            "Board_Ft_Removed int null,Board_Ft_Value int null,Total_Value int null);")
+    end
+    return nothing
+end
+DBSECHARV(args...) = nothing   # per-species insert (no merch volume here → no rows)
 function DBSFMCANPR(args...); return nothing; end      # dbsfmcanpr.f: fire canopy report
-function DBSFMDWCOV(args...); return nothing; end      # dbsfmdwcov.f: fire down woody cover
-function DBSFMDWVOL(args...); return nothing; end      # dbsfmdwvol.f: fire down woody volume
-function DBSFMFUEL(args...); return nothing; end       # dbsfmfuel.f: fire fuel model
-function DBSFMHRPT(args...); return nothing; end       # dbsfmhrpt.f: fire harvest report
-function DBSFMPFC(args...); return nothing; end        # dbsfmpfc.f: fire potential flame/crown
 function DBSSPRT(args...); return nothing; end         # dbssprt.f: establishment sprout report
 
 # ---------------------------------------------------------------------------

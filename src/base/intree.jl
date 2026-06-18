@@ -67,8 +67,9 @@ function INTREE(record::String, irdplv::Int32, isdsp::Int32,
     npnvrs = (irdplv > Int32(0)) ? Int32(5) : Int32(1)
 
     # Check if Western Root Disease model is active
-    lrdgo = false; lrdte = false
-    RDATV(lrdgo, lrdte)
+    lrdgo_ref = Ref(false); lrdte_ref = Ref(false)
+    RDATV(lrdgo_ref, lrdte_ref)
+    lrdgo = lrdgo_ref[]; lrdte = lrdte_ref[]
     if lrdgo && lrdte
         itrrr, itp1rr = RDTRES()
         imax = itp1rr
@@ -104,7 +105,10 @@ function INTREE(record::String, irdplv::Int32, isdsp::Int32,
     # Attempt to read from DBS (database) first
     # -----------------------------------------------------------------------
     @label label_31
-    dbskode = Int32(1)
+    # Default 0 = "nothing from DBS, read from text file".
+    # Real DBSTREESIN sets it to 1 (DB record) or -1 (end of data).
+    # Our stub returns nothing, so the default must be 0 (text-read path).
+    dbskode = Int32(0)
     itrei = Int32(0)
     ith   = Int32(0)
     tht   = Float32(0.0)
@@ -342,7 +346,8 @@ function INTREE(record::String, irdplv::Int32, isdsp::Int32,
     ITRE[i]       = iptknt
 
     # Call establishment system for plot site data
-    ESPLT1(itrei, imc1, npnvrs, ipvars[1])
+    # (pass the full ipvars vector — Fortran's IPVARS(1) is the array, not a scalar)
+    ESPLT1(itrei, imc1, npnvrs, ipvars)
     irtncd = fvsGetRtnCode()
     if irtncd != 0; return nothing; end
     @goto label_65
@@ -408,7 +413,7 @@ function INTREE(record::String, irdplv::Int32, isdsp::Int32,
             break
         end
     end
-    if !already_warned
+    if !already_warned && ispi > 0
         @printf(io_units[JOSTND],
             "            NOTE: INPUT SPECIES CODE (%8s)WAS SET TO (%4s) FOR THIS PROJECTION.\n",
             cspi_loc, strip(JSP[ispi]))
@@ -626,75 +631,248 @@ function INTREE(record::String, irdplv::Int32, isdsp::Int32,
 end
 
 # ---------------------------------------------------------------------------
-# parse_tree_record — parse a fixed-format .tre text line using TREFMT fields
+# Fortran FORMAT string interpreter for TREFMT-based tree record parsing
 #
-# Fortran FORMAT: (I4,T1,I7,F6.0,I1,A3,F4.1,F3.1,2F3.0,F4.1,I1,3(I2,I2),2I1,I2,2I3,2I1,F3.0)
-# Field layout (1-based columns):
-#   1-4   : plot number (ITREI)          I4
-#   1-7   : tree number (IDTREE)         I7  (T1 resets; overlaps)
-#   8-13  : TPA (PROB)                   F6.0
-#   14    : history (ITH)                I1
-#   15-17 : species (CSPI)               A3
-#   18-21 : DBH (DG input)              F4.1
-#   22-24 : DG                           F3.1
-#   25-27 : HT                           F3.0
-#   28-30 : THT                          F3.0
-#   31-34 : HTG                          F4.1
-#   35    : ICR                          I1
-#   36-37 : IDAMCD(1)                    I2
-#   38-39 : IDAMCD(2)                    I2
-#   40-41 : IDAMCD(3)                    I2
-#   42-43 : IDAMCD(4)                    I2
-#   44-45 : IDAMCD(5)                    I2
-#   46-47 : IDAMCD(6)                    I2
-#   48    : IMC1                         I1
-#   49    : KUTKOD                       I1
-#   50-51 : IPVARS(1)                    I2
-#   52-54 : IPVARS(2)                    I3
-#   55-57 : IPVARS(3)                    I3
-#   58-59 : IPVARS(4)                    I2
-#   60-61 : IPVARS(5)                    I2
-#   62-64 : ABIRTH                       F3.0
-#
-# Returns a tuple of parsed values, or nothing on error.
+# Each parsed field is a NamedTuple:
+#   col1 (1-based start), col2 (1-based end), kind (:int/:float/:string), decimals
 # ---------------------------------------------------------------------------
-function parse_tree_record(line::AbstractString)
-    # Pad to 80 chars if shorter
-    rec = rpad(line, 80)
-    try
-        itrei   = parse_int_field(rec,  1,  4)
-        idtree  = parse_int_field(rec,  1,  7)
-        prob    = parse_real_field(rec, 8, 13)
-        ith     = parse_int_field(rec,  14, 14)
-        cspi    = rpad(strip(rec[15:17]), 8)
-        dbh_val = parse_real_field(rec, 18, 21)   # DBH from F4.1
-        dg_val  = parse_real_field(rec, 22, 24)
-        ht_val  = parse_real_field(rec, 25, 27)
-        tht_val = parse_real_field(rec, 28, 30)
-        htg_val = parse_real_field(rec, 31, 34)
-        icr_val = parse_int_field(rec,  35, 35)
-        dam1    = parse_int_field(rec,  36, 37)
-        dam2    = parse_int_field(rec,  38, 39)
-        dam3    = parse_int_field(rec,  40, 41)
-        dam4    = parse_int_field(rec,  42, 43)
-        dam5    = parse_int_field(rec,  44, 45)
-        dam6    = parse_int_field(rec,  46, 47)
-        imc1    = parse_int_field(rec,  48, 48)
-        kutkod  = parse_int_field(rec,  49, 49)
-        ipv1    = parse_int_field(rec,  50, 51)
-        ipv2    = parse_int_field(rec,  52, 54)
-        ipv3    = parse_int_field(rec,  55, 57)
-        ipv4    = parse_int_field(rec,  58, 59)
-        ipv5    = parse_int_field(rec,  60, 61)
-        abirth  = (length(rec) >= 64) ? parse_real_field(rec, 62, 64) : Float32(0.0)
 
-        return (Int32(itrei), Int32(idtree), Float32(prob), Int32(ith), cspi,
-                Float32(dbh_val), Float32(dg_val), Float32(ht_val), Float32(tht_val),
-                Float32(htg_val), Int32(icr_val),
-                Int32(dam1), Int32(dam2), Int32(dam3), Int32(dam4), Int32(dam5), Int32(dam6),
-                Int32(imc1), Int32(kutkod),
-                Int32(ipv1), Int32(ipv2), Int32(ipv3), Int32(ipv4), Int32(ipv5),
-                Float32(abirth))
+struct TREFMTField
+    col1::Int
+    col2::Int
+    kind::Symbol   # :int, :float, :string
+    decimals::Int  # implied decimal places for :float (applied only if no '.' in text)
+end
+
+# Cache: last TREFMT string → parsed fields
+const _trefmt_cache = Ref{String}("")
+const _trefmt_fields = Ref{Vector{TREFMTField}}(TREFMTField[])
+
+# Split a format body string by commas, but don't split inside parentheses.
+function _fmt_split(s::AbstractString)
+    tokens = String[]
+    depth = 0
+    start = 1
+    for (i, c) in enumerate(s)
+        if c == '('; depth += 1
+        elseif c == ')'; depth -= 1
+        elseif c == ',' && depth == 0
+            push!(tokens, s[start:i-1])
+            start = i + 1
+        end
+    end
+    push!(tokens, s[start:end])
+    return tokens
+end
+
+# Expand format tokens into TREFMTField list, advancing col_ref.
+function _fmt_expand!(fields::Vector{TREFMTField}, s::AbstractString, col_ref::Ref{Int})
+    for tok in _fmt_split(s)
+        tok = strip(tok)
+        isempty(tok) && continue
+        tok_up = uppercase(tok)
+
+        # Repeated group: n(...)
+        m = match(r"^(\d+)\((.+)\)$", tok)
+        if m !== nothing
+            n = parse(Int, m.captures[1])
+            inner = m.captures[2]
+            for _ in 1:n
+                _fmt_expand!(fields, inner, col_ref)
+            end
+            continue
+        end
+
+        # Repeated single descriptor: nX... (e.g., 5I1, 2F3.0)
+        m2 = match(r"^(\d+)([IiFfAa])(.*)$", tok_up)
+        if m2 !== nothing
+            n = parse(Int, m2.captures[1])
+            for _ in 1:n
+                _fmt_single!(fields, m2.captures[2] * m2.captures[3], col_ref)
+            end
+            continue
+        end
+
+        # Single descriptor
+        _fmt_single!(fields, tok_up, col_ref)
+    end
+end
+
+function _fmt_single!(fields::Vector{TREFMTField}, tok::AbstractString, col_ref::Ref{Int})
+    if startswith(tok, "T")
+        # Tab: set column position
+        n = parse(Int, tok[2:end])
+        col_ref[] = n
+    elseif startswith(tok, "I")
+        w = parse(Int, tok[2:end])
+        push!(fields, TREFMTField(col_ref[], col_ref[] + w - 1, :int, 0))
+        col_ref[] += w
+    elseif startswith(tok, "F")
+        m = match(r"^F(\d+)\.(\d+)$", tok)
+        if m !== nothing
+            w = parse(Int, m.captures[1])
+            d = parse(Int, m.captures[2])
+            push!(fields, TREFMTField(col_ref[], col_ref[] + w - 1, :float, d))
+            col_ref[] += w
+        end
+    elseif startswith(tok, "A")
+        w = parse(Int, tok[2:end])
+        push!(fields, TREFMTField(col_ref[], col_ref[] + w - 1, :string, 0))
+        col_ref[] += w
+    elseif startswith(tok, "X")
+        # Horizontal skip
+        w = length(tok) > 1 ? parse(Int, tok[2:end]) : 1
+        col_ref[] += w
+    # E, D, G descriptors if ever needed — skip for now
+    end
+end
+
+function _get_trefmt_fields()::Vector{TREFMTField}
+    fmt = strip(TREFMT)
+    if fmt == _trefmt_cache[]
+        return _trefmt_fields[]
+    end
+    # Parse the format string (strip outer parens)
+    s = fmt
+    if !isempty(s) && s[1] == '('
+        depth = 0
+        for (i, c) in enumerate(s)
+            if c == '('; depth += 1
+            elseif c == ')'; depth -= 1
+            end
+            if depth == 0
+                s = strip(s[2:i-1])
+                break
+            end
+        end
+    end
+    fields = TREFMTField[]
+    col_ref = Ref(1)
+    _fmt_expand!(fields, s, col_ref)
+    _trefmt_cache[] = fmt
+    _trefmt_fields[] = fields
+    return fields
+end
+
+# Read one field from a line given a TREFMTField spec.
+function _read_field(rec::AbstractString, f::TREFMTField)
+    c1 = f.col1
+    c2 = min(f.col2, length(rec))
+    if c1 > length(rec)
+        return f.kind == :string ? rpad("", f.col2 - f.col1 + 1) :
+               f.kind == :int   ? Int32(0) : Float32(0.0)
+    end
+    raw = rec[c1:c2]
+    if f.kind == :int
+        s = strip(raw)
+        isempty(s) && return Int32(0)
+        v = tryparse(Int32, s)
+        return v === nothing ? Int32(0) : v
+    elseif f.kind == :float
+        s = strip(raw)
+        isempty(s) && return Float32(0.0)
+        if occursin('.', s)
+            v = tryparse(Float32, s)
+            return v === nothing ? Float32(0.0) : v
+        else
+            v = tryparse(Float32, s)
+            if v === nothing; return Float32(0.0); end
+            # Apply implied decimal places
+            return f.decimals > 0 ? v / Float32(10.0^f.decimals) : v
+        end
+    else # :string
+        w = f.col2 - f.col1 + 1
+        return rpad(raw, w)
+    end
+end
+
+"""
+    parse_tree_record(line) → tuple or nothing
+
+Parse one tree data record using the current TREFMT format string.
+Returns the 25-element tuple (ITREI, IDTREE, PROB, ITH, CSPI, DBH, DG, HT,
+THT, HTG, ICR, IDAMCD×6, IMC1, KUTKOD, IPVARS×5, ABIRTH) or nothing on error.
+
+The READ argument order matches intree.f line 185-188:
+  ITREI, IDTREE, PROB, ITH, CSPI, DBH, DG, HT, THT, HTG, ICR,
+  IDAMCD(1..6), IMC1, KUTKOD, IPVARS(1..5), ABIRTH
+"""
+
+# Helper: read integer from field n of fields array
+function _ri(rec, fields, n)::Int32
+    n > length(fields) && return Int32(0)
+    f = fields[n]
+    c1 = f.col1; c2 = min(f.col2, length(rec))
+    c1 > length(rec) && return Int32(0)
+    s = strip(rec[c1:c2])
+    isempty(s) && return Int32(0)
+    v = tryparse(Int32, s)
+    v === nothing ? Int32(0) : v
+end
+
+# Helper: read float from field n (with Fortran implied-decimal handling)
+function _rf(rec, fields, n)::Float32
+    n > length(fields) && return Float32(0.0)
+    f = fields[n]
+    c1 = f.col1; c2 = min(f.col2, length(rec))
+    c1 > length(rec) && return Float32(0.0)
+    s = strip(rec[c1:c2])
+    isempty(s) && return Float32(0.0)
+    if occursin('.', s)
+        v = tryparse(Float32, s)
+        return v === nothing ? Float32(0.0) : v
+    else
+        v = tryparse(Float32, s)
+        v === nothing && return Float32(0.0)
+        return f.decimals > 0 ? v / Float32(10^f.decimals) : v
+    end
+end
+
+# Helper: read string from field n, padded to 8 chars
+function _rs(rec, fields, n)::String
+    n > length(fields) && return "        "
+    f = fields[n]
+    c1 = f.col1; c2 = min(f.col2, length(rec))
+    c1 > length(rec) && return "        "
+    rpad(strip(rec[c1:c2]), 8)
+end
+
+function parse_tree_record(line::AbstractString)
+    fields = _get_trefmt_fields()
+    nf = length(fields)
+    nf == 0 && return nothing   # TREFMT not yet set
+
+    maxcol = nf > 0 ? maximum(f.col2 for f in fields) : 80
+    rec = rpad(line, max(maxcol, 80))
+
+    try
+        return (
+            _ri(rec, fields, 1),   # ITREI
+            _ri(rec, fields, 2),   # IDTREE
+            _rf(rec, fields, 3),   # PROB
+            _ri(rec, fields, 4),   # ITH
+            _rs(rec, fields, 5),   # CSPI
+            _rf(rec, fields, 6),   # DBH
+            _rf(rec, fields, 7),   # DG
+            _rf(rec, fields, 8),   # HT
+            _rf(rec, fields, 9),   # THT
+            _rf(rec, fields, 10),  # HTG
+            _ri(rec, fields, 11),  # ICR
+            _ri(rec, fields, 12),  # IDAMCD(1)
+            _ri(rec, fields, 13),  # IDAMCD(2)
+            _ri(rec, fields, 14),  # IDAMCD(3)
+            _ri(rec, fields, 15),  # IDAMCD(4)
+            _ri(rec, fields, 16),  # IDAMCD(5)
+            _ri(rec, fields, 17),  # IDAMCD(6)
+            _ri(rec, fields, 18),  # IMC1
+            _ri(rec, fields, 19),  # KUTKOD
+            _ri(rec, fields, 20),  # IPVARS(1)
+            _ri(rec, fields, 21),  # IPVARS(2)
+            _ri(rec, fields, 22),  # IPVARS(3)
+            _ri(rec, fields, 23),  # IPVARS(4)
+            _ri(rec, fields, 24),  # IPVARS(5)
+            nf >= 25 ? _rf(rec, fields, 25) : Float32(0.0)  # ABIRTH
+        )
     catch
         return nothing
     end

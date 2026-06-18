@@ -207,7 +207,7 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
     array  = zeros(Float32, 12)
     prms   = zeros(Float32, 13)
     aprms  = ["          " for _ in 1:13]
-    lnotbk = falses(12)
+    lnotbk = fill(false, 12)
 
     kode_r   = Ref{Int32}(0)
     number_r = Ref{Int32}(0)
@@ -274,8 +274,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
             continue  # GOTO 10
         end
 
-        # label_90 — signal fire model active and dispatch
-        LFMON = true
+        # label_90 — signal fire model active and dispatch (fmin.f:137 LFMON=.TRUE.)
+        global LFMON = true
         number = Int(number_r[])
 
         # ── OPTION 1: SALVSP ──────────────────────────────────────────────────
@@ -298,8 +298,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             nparms = Int32(2); prms[1] = 0f0; prms[2] = 0f0
-            jsp = Int32(0)
-            SPDECD(Int32(2), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(2), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             prms[1] = Float32(jsp)
             lnotbk[3] && (prms[2] = array[3])
@@ -329,8 +330,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
         # ── OPTION 4: BURNREPT ───────────────────────────────────────────────
         elseif number == 4
             IDBRN == 0 && GETID(Ref(IDBRN))
-            IFMBRB = IY[1]
-            IFMBRE = IY[1] + Int32(999)
+            global IFMBRB = IY[1]
+            global IFMBRE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE BURN CONDITIONS REPORT WILL BE WRITTEN WHEN A FIRE OCCURS.\n", keywrd[])
             continue
 
@@ -444,15 +445,16 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 @printf(io_units[JOSTND], "\n%-8s   ***KEYWORD IS A STAND-LEVEL KEYWORD ONLY AND CANNOT BE INCLUDED WITH THE LANDSCAPE-LEVEL KEYWORDS\n", keywrd[])
                 continue
             end
-            IPFLMB = IY[1]
-            IPFLME = IY[1] + Int32(999)
+            global IPFLMB = IY[1]
+            global IPFLME = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE POTENTIAL FIRE REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
         # ── OPTION 9: SNAGFALL ───────────────────────────────────────────────
         elseif number == 9
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             if jsp != 0
                 lnotbk[2] && (FALLX[jsp] = array[2])
@@ -474,8 +476,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
 
         # ── OPTION 10: SNAGBRK ───────────────────────────────────────────────
         elseif number == 10
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             yrs50[1] = Float32(trunc(array[2])); yrs50[1] < 1f0 && (yrs50[1]=1f0)
             yrs50[2] = Float32(trunc(array[3])); yrs50[2] < 1f0 && (yrs50[2]=1f0)
@@ -527,8 +530,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
 
         # ── OPTION 11: SNAGDCAY ──────────────────────────────────────────────
         elseif number == 11
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             if jsp != 0
                 lnotbk[2] && (DECAYX[jsp] = array[2])
@@ -614,8 +618,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             IDFLAL == 0 && GETID(Ref(IDFLAL))
-            IFLALB = IY[1]
-            IFLALE = IY[1] + Int32(999)
+            global IFLALB = IY[1]
+            global IFLALE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE ALL FUELS REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
@@ -715,8 +719,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
 
         # ── OPTION 19: FUELPOOL ──────────────────────────────────────────────
         elseif number == 19
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             (jsp == -999 || !lnotbk[2]) && continue
             idec = Int32(trunc(array[2]))
             (idec < 1 || idec > 4) && continue
@@ -793,8 +798,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
             end
             idt = Int32(1); nparms = Int32(6)
             for pi in 1:6; prms[pi] = -1f0; end
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             (jsp == 0 || jsp == -999) && continue
             prms[1] = Float32(jsp)
             lnotbk[2] && (prms[2]=array[2]); lnotbk[3] && (prms[3]=array[3])
@@ -891,16 +897,16 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
         # ── OPTION 27: FUELREPT ──────────────────────────────────────────────
         elseif number == 27
             IDFUL == 0 && GETID(Ref(IDFUL))
-            IFMFLB = IY[1]
-            IFMFLE = IY[1] + Int32(999)
+            global IFMFLB = IY[1]
+            global IFMFLE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE FUEL CONSUMPTION AND PHYSICAL EFFECTS REPORT WILL BE WRITTEN WHEN A FIRE OCCURS.\n", keywrd[])
             continue
 
         # ── OPTION 28: MORTREPT ──────────────────────────────────────────────
         elseif number == 28
             IDMRT == 0 && GETID(Ref(IDMRT))
-            IFMMRB = IY[1]
-            IFMMRE = IY[1] + Int32(999)
+            global IFMMRB = IY[1]
+            global IFMMRE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE TREE MORTALITY REPORT WILL BE WRITTEN WHEN A FIRE OCCURS.\n", keywrd[])
             continue
 
@@ -952,8 +958,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
 
         # ── OPTION 31: SNAGSUM ───────────────────────────────────────────────
         elseif number == 31
-            ISNGSM = Int32(-1)
-            array[1] >= 0f0 && (ISNGSM = Int32(0))
+            global ISNGSM = Int32(-1)
+            array[1] >= 0f0 && (global ISNGSM = Int32(0))
             if ISNGSM >= 0
                 lkecho && @printf(io_units[JOSTND], "\n%-8s   SNAG SUMMARY REPORT REQUESTED\n", keywrd[])
             else
@@ -1068,8 +1074,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
 
         # ── OPTION 37: SNAGPSFT ──────────────────────────────────────────────
         elseif number == 37
-            jsp = Int32(0)
-            SPDECD(Int32(1), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(1), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             if jsp != 0
                 if lnotbk[2]
@@ -1163,7 +1170,7 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
             for pi in 1:13; prms[pi] = -1f0; end
             # Read supplemental record (7A10) for fields 7-13
             try
-                IRECNT += Int32(1)
+                global IRECNT = IRECNT + Int32(1)
                 supline = rpad(readline(io_units[IREAD]), 70)
                 for pi in 7:13
                     off = (pi-7)*10+1
@@ -1255,7 +1262,7 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
         elseif number == 43
             IDSHEAT == 0 && GETID(Ref(IDSHEAT))
             ISHEATB = -IY[1]
-            ISHEATE = IY[1] + Int32(999)
+            global ISHEATE = IY[1] + Int32(999)
             SOILTP = Int32(3)
             lnotbk[3] && (SOILTP = Int32(trunc(array[3])))
             SOILTP < 1 && (SOILTP = Int32(1)); SOILTP > 5 && (SOILTP = Int32(5))
@@ -1269,8 +1276,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             IDCRPT == 0 && GETID(Ref(IDCRPT))
-            ICRPTB = IY[1]
-            ICRPTE = IY[1] + Int32(999)
+            global ICRPTB = IY[1]
+            global ICRPTE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE MAIN CARBON REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
@@ -1281,8 +1288,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             IDCHRV == 0 && GETID(Ref(IDCHRV))
-            ICHRVB = IY[1]
-            ICHRVE = IY[1] + Int32(999)
+            global ICHRVB = IY[1]
+            global ICHRVE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s    THE HARVESTED PRODUCTS REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
@@ -1292,6 +1299,7 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 @printf(io_units[JOSTND], "\n%-8s   ***KEYWORD IS A STAND-LEVEL KEYWORD ONLY AND CANNOT BE INCLUDED WITH THE LANDSCAPE-LEVEL KEYWORDS\n", keywrd[])
                 continue
             end
+            global ICMETH, ICMETRC, CRDCAY
             lnotbk[1] && (ICMETH  = Int32(max(0, min(1, Int(trunc(array[1]))))))
             lnotbk[2] && (ICMETRC = Int32(max(0, min(2, Int(trunc(array[2]))))))
             lnotbk[3] && (CRDCAY  = max(0f0, min(1f0, array[3])))
@@ -1309,8 +1317,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
             end
             icanpr = Int32(1)
             DBSFMLINK(icanpr)
-            ICFPB = IY[1]
-            ICFPE = IY[1] + Int32(999)
+            global ICFPB = IY[1]
+            global ICFPE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   CANOPY FUELS PROFILE TABLE SENT TO SPECIFIED DATABASE.\n", keywrd[])
             continue
 
@@ -1426,8 +1434,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             IDDWRP == 0 && GETID(Ref(IDDWRP))
-            IDWRPB = IY[1]
-            IDWRPE = IY[1] + Int32(999)
+            global IDWRPB = IY[1]
+            global IDWRPE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE DOWN WOOD VOLUME REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
@@ -1438,8 +1446,8 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 continue
             end
             IDDWCV == 0 && GETID(Ref(IDDWCV))
-            IDWCVB = IY[1]
-            IDWCVE = IY[1] + Int32(999)
+            global IDWCVB = IY[1]
+            global IDWCVE = IY[1] + Int32(999)
             lkecho && @printf(io_units[JOSTND], "\n%-8s   THE DOWN WOOD COVER REPORT WILL BE PRINTED.\n", keywrd[])
             continue
 
@@ -1473,8 +1481,9 @@ function FMIN(icall::Int32, nsp::AbstractMatrix, lkecho::Bool)
                 end
                 continue
             end
-            jsp = Int32(0)
-            SPDECD(Int32(3), Ref(jsp), view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp_ref = Ref(Int32(0))
+            SPDECD(Int32(3), jsp_ref, view(nsp,:,1), JOSTND, Ref(IRECNT), keywrd[], array, kard)
+            jsp = jsp_ref[]
             jsp == -999 && continue
             array[3] = Float32(jsp)
             !lnotbk[4] && (array[4] = 0f0)

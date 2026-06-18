@@ -9,7 +9,7 @@
 
 function FMTRET(iyr::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMTRET", Int32(6), ICYC)
+    debug = DBCHK(false, "FMTRET", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMTRET CYCLE=%3d\n", ICYC)
     end
@@ -103,7 +103,7 @@ end
 
 function FMFMOV(iyr::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMFMOV", Int32(5), ICYC)
+    debug = DBCHK(false, "FMFMOV", Int32(5), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMFMOV CYCLE = %2d\n", ICYC)
     end

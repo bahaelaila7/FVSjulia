@@ -10,7 +10,8 @@ function SUMHED()
     REVISE(VARACD, rev_ref)
     rev = rev_ref[]
 
-    io = io_units[Int32(JOSCRN)]
+    _sio = get(io_units, Int32(JOSCRN), nothing)
+    io = (_sio !== nothing && isopen(_sio)) ? _sio : get(io_units, Int32(JOSTND), stdout)
 
     if VARACD == "CR"
         crmt = 1 <= Int(IMODTY) <= 5 ? _SUMHED_CRMT[Int(IMODTY)] : "??"

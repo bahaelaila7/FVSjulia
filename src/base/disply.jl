@@ -8,6 +8,8 @@
 # Fortran WRITE(JOTREE) calls are binary scratch-file records consumed by PRTEXM.
 # Since PRTEXM is a stub, those writes are omitted here.
 
+@inline _dtrunc(x::AbstractFloat)::Int32 = isfinite(x) ? unsafe_trunc(Int32, x) : Int32(0)
+
 function DISPLY()
     io = get(io_units, Int(JOSTND), stdout)
 
@@ -164,7 +166,7 @@ function DISPLY()
     end
 
     # Compute JSDI (integer SDI before cutting)
-    jsdi = LZEIDE ? Int(SDIBC2 + Float32(0.5)) : Int(SDIBC + Float32(0.5))
+    jsdi = LZEIDE ? trunc(Int, SDIBC2 + Float32(0.5)) : trunc(Int, SDIBC + Float32(0.5))
 
     if ONTREM[7] > Float32(0)
         @goto label_35
@@ -177,7 +179,7 @@ function DISPLY()
     @label label_35
     # Thinning occurred: write pre-thin (IRT=2) then post-thin (IRT=3)
     # WRITE(JOTREE) 2, IOAGE, ORMSQD, OLDTPA, OLDBA, OLDAVH, RELDM1, JSDI  — binary stub
-    jsdi = LZEIDE ? Int(SDIAC2 + Float32(0.5)) : Int(SDIAC + Float32(0.5))
+    jsdi = LZEIDE ? trunc(Int, SDIAC2 + Float32(0.5)) : trunc(Int, SDIAC + Float32(0.5))
     # WRITE(JOTREE) 3, ATAVD, ATTPA, ATBA, ATAVH, ATCCF, JSDI  — binary stub
 
     @label label_36
@@ -275,11 +277,11 @@ function DISPLY()
     @label label_42
 
     IOSUM[1,  iknt] = Int32(IY[iknt])
-    IOSUM[3,  iknt] = Int32(ONTCUR[7] / GROSPC + Float32(0.5))
-    IOSUM[4,  iknt] = Int32(OCVCUR[7] / GROSPC + Float32(0.5))
-    IOSUM[5,  iknt] = Int32(OMCCUR[7] / GROSPC + Float32(0.5))
-    IOSUM[6,  iknt] = Int32(OBFCUR[7] / GROSPC + Float32(0.5))
-    IOSUM[21, iknt] = Int32(OSCCUR[7] / GROSPC + Float32(0.5))
+    IOSUM[3,  iknt] = _dtrunc( ONTCUR[7] / GROSPC + Float32(0.5))
+    IOSUM[4,  iknt] = _dtrunc( OCVCUR[7] / GROSPC + Float32(0.5))
+    IOSUM[5,  iknt] = _dtrunc( OMCCUR[7] / GROSPC + Float32(0.5))
+    IOSUM[6,  iknt] = _dtrunc( OBFCUR[7] / GROSPC + Float32(0.5))
+    IOSUM[21, iknt] = _dtrunc( OSCCUR[7] / GROSPC + Float32(0.5))
 
     IOSUM[18, iknt] = Int32(IFORTP)
     IOSUM[19, iknt] = Int32(ISZCL)
@@ -300,32 +302,32 @@ function DISPLY()
         @goto label_91
     end
 
-    IOSUM[3,  iknt] = Int32(OLDTPA / GROSPC + Float32(0.5))
-    IOSUM[11, iknt] = Int32(ATBA   / GROSPC + Float32(0.5))
-    IOSUM[12, iknt] = Int32(ATCCF  / GROSPC + Float32(0.5))
-    IOSUM[13, iknt] = Int32(ATAVH  + Float32(0.5))
+    IOSUM[3,  iknt] = _dtrunc( OLDTPA  / GROSPC + Float32(0.5))
+    IOSUM[11, iknt] = _dtrunc( ATBA    / GROSPC + Float32(0.5))
+    IOSUM[12, iknt] = _dtrunc( ATCCF   / GROSPC + Float32(0.5))
+    IOSUM[13, iknt] = _dtrunc( ATAVH            + Float32(0.5))
     QDBHAT[iknt] = ATAVD
     sdiactmp = LZEIDE ? SDIAC2 : SDIAC
-    ISDIAT[iknt] = Int32(sdiactmp / GROSPC + Float32(0.5))
+    ISDIAT[iknt] = _dtrunc( sdiactmp / GROSPC + Float32(0.5))
     @goto label_92
 
     @label label_91
-    IOSUM[11, iknt] = Int32(OLDBA  / GROSPC + Float32(0.5))
-    IOSUM[12, iknt] = Int32(RELDM1 / GROSPC + Float32(0.5))
-    IOSUM[13, iknt] = Int32(OLDAVH + Float32(0.5))
+    IOSUM[11, iknt] = _dtrunc( OLDBA  / GROSPC + Float32(0.5))
+    IOSUM[12, iknt] = _dtrunc( RELDM1 / GROSPC + Float32(0.5))
+    IOSUM[13, iknt] = _dtrunc( OLDAVH           + Float32(0.5))
     QDBHAT[iknt] = ORMSQD
     sdibctmp = LZEIDE ? SDIBC2 : SDIBC
-    ISDIAT[iknt] = Int32(sdibctmp / GROSPC + Float32(0.5))
+    ISDIAT[iknt] = _dtrunc( sdibctmp / GROSPC + Float32(0.5))
 
     @label label_92
     sdibctmp = LZEIDE ? SDIBC2 : SDIBC
-    ISDI_S[iknt] = Int32(sdibctmp / GROSPC + Float32(0.5))
+    ISDI_S[iknt] = _dtrunc( sdibctmp / GROSPC + Float32(0.5))
 
-    IOSUM[7,  iknt] = Int32(ONTREM[7] / GROSPC + Float32(0.5))
-    IOSUM[8,  iknt] = Int32(OCVREM[7] / GROSPC + Float32(0.5))
-    IOSUM[9,  iknt] = Int32(OMCREM[7] / GROSPC + Float32(0.5))
-    IOSUM[22, iknt] = Int32(OSCREM[7] / GROSPC + Float32(0.5))
-    IOSUM[10, iknt] = Int32(OBFREM[7] / GROSPC + Float32(0.5))
+    IOSUM[7,  iknt] = _dtrunc( ONTREM[7] / GROSPC + Float32(0.5))
+    IOSUM[8,  iknt] = _dtrunc( OCVREM[7] / GROSPC + Float32(0.5))
+    IOSUM[9,  iknt] = _dtrunc( OMCREM[7] / GROSPC + Float32(0.5))
+    IOSUM[22, iknt] = _dtrunc( OSCREM[7] / GROSPC + Float32(0.5))
+    IOSUM[10, iknt] = _dtrunc( OBFREM[7] / GROSPC + Float32(0.5))
 
     # Accumulate removal totals
     if iknt <= Int(NCYC)
@@ -337,12 +339,12 @@ function DISPLY()
     end
 
     IOSUM[14, iknt] = Int32(IFINT)
-    IOSUM[15, iknt] = Int32(OACC[7]  / GROSPC + Float32(0.5))
-    IOSUM[16, iknt] = Int32(OMORT[7] / GROSPC + Float32(0.5))
+    IOSUM[15, iknt] = _dtrunc( OACC[7]  / GROSPC + Float32(0.5))
+    IOSUM[16, iknt] = _dtrunc( OMORT[7] / GROSPC + Float32(0.5))
     QSDBT[iknt]  = ORMSQD
-    IOLDBA[iknt] = Int32(OLDBA  / GROSPC + Float32(0.5))
-    IBTCCF[iknt] = Int32(RELDM1 / GROSPC + Float32(0.5))
-    IBTAVH[iknt] = Int32(OLDAVH + Float32(0.5))
+    IOLDBA[iknt] = _dtrunc( OLDBA  / GROSPC + Float32(0.5))
+    IBTCCF[iknt] = _dtrunc( RELDM1 / GROSPC + Float32(0.5))
+    IBTAVH[iknt] = _dtrunc( OLDAVH           + Float32(0.5))
 
     iswt = if SAMWT >= Float32(0.99999)
         Int32(floor(SAMWT + Float32(0.0001)))
@@ -401,7 +403,8 @@ function DISPLY()
     @label label_150
     if LSTART && LSCRN; SUMHED(); end
     if !LSTART && LSCRN
-        joscrn_io = get(io_units, Int(JOSCRN), stdout)
+        _sio = get(io_units, Int32(JOSCRN), nothing)
+        joscrn_io = (_sio !== nothing && isopen(_sio)) ? _sio : get(io_units, Int32(JOSTND), stdout)
         # 170 FORMAT(I4,I6,3I4,F5.1,4I6,3I4,F5.1,I4,I4)
         @printf(joscrn_io, "%4d%6d%4d%4d%4d%5.1f%6d%6d%6d%6d%4d%4d%4d%5.1f%4d%4d\n",
                 IOSUM[1, iknt],  IOSUM[3, iknt],

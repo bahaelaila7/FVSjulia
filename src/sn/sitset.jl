@@ -435,11 +435,9 @@ function SITSET()
         voleq  = "           "
         if (Int(METHC[ispc]) == 6 || Int(METHC[ispc]) == 9) && VEQNNC[ispc] == "           "
             prod = "02"
-            VOLEQDEF(var, iregn, forst, dist, ifiasp, prod, voleq)
-            # stub leaves VEQNNC[ispc] as "           "
+            VEQNNC[ispc] = VOLEQDEF(var, iregn, forst, dist, ifiasp, prod, voleq)
         elseif Int(METHC[ispc]) == 10
-            NVBEQDEF(ifiasp, voleq)
-            # stub leaves VEQNNC[ispc] as "           "
+            VEQNNC[ispc] = NVBEQDEF(ifiasp, voleq)
         end
         if debug
             @printf(io_units[Int32(16)],
@@ -449,7 +447,7 @@ function SITSET()
         if (Int(METHB[ispc]) == 6 || Int(METHB[ispc]) == 9) && VEQNNB[ispc] == "           "
             prod  = "01"
             voleq = "           "
-            VOLEQDEF(var, iregn, forst, dist, ifiasp, prod, voleq)
+            VEQNNB[ispc] = VOLEQDEF(var, iregn, forst, dist, ifiasp, prod, voleq)
         end
     end
 

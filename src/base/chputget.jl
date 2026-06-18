@@ -76,8 +76,10 @@ function CHPUT()
     nplt26 = rpad(NPLT, 26)[1:26]
     _chwrit_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, nplt26)
 
-    # DBCN — variable length (LEN(DBCN) in Fortran)
-    _chwrit_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, DBCN)
+    # DBCN — fixed CHARACTER*40 in Fortran (LEN(DBCN)=40 always). Must write a
+    # fixed 40 bytes regardless of the current Julia string length, or the char
+    # stream desyncs on restart (DBCN is still its default length at read time).
+    _chwrit_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, rpad(DBCN, 40)[1:40])
 
     # Event monitor label sets (conditional on LBSETS)
     if LBSETS
@@ -203,9 +205,8 @@ function CHGET()
     # NPLT (26 chars)
     global NPLT = _chread_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, 26)
 
-    # DBCN — same length as the current DBCN (LEN(DBCN))
-    dbcn_len = length(DBCN)
-    global DBCN = _chread_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, dbcn_len)
+    # DBCN — fixed CHARACTER*40 (must match CHPUT's fixed 40-byte write)
+    global DBCN = _chread_str!(cbuff, ipnt, _CHPUTGET_LNCBUF, ibeg, 40)
 
     # Event monitor label sets (conditional on LBSETS)
     if LBSETS

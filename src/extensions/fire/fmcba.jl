@@ -8,7 +8,7 @@
 
 function FMCBA(iyr::Integer, iswtch::Integer)
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCBA", Int32(5), ICYC)
+    debug = DBCHK(false, "FMCBA", Int32(5), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " ENTERING FMCBA CYCLE = %2d\n", ICYC)
     end

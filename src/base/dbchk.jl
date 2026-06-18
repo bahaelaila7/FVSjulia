@@ -22,3 +22,8 @@ end
 function DBCHK(subin::AbstractString, nc::Integer)::Bool
     return DBCHK(false, subin, nc, Int(ICYC))
 end
+
+# 3-arg overload: DBCHK(name, level, icyc) — used in some fire files
+function DBCHK(subin::AbstractString, nc::Integer, icyc::Integer)::Bool
+    return DBCHK(false, subin, nc, icyc)
+end

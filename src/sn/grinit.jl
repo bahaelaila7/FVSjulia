@@ -139,7 +139,7 @@ function GRINIT()
     global ISEFOR  = Int32(0)
     global LDCOR2  = false
     global LDUBDG  = false
-    global LEVUSE  = false
+    global LEVUSE  = true    # grinit.f:205 (so EVTSTV(0) runs every stand → MAI computed)
     global LFIXSD  = false
     global LHCOR2  = false
     global LRCOR2  = false

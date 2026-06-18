@@ -201,7 +201,7 @@ function MORTS()
     # ---------------------------------------------------------------------------
     # Call SDICAL to get SDIMAX, then compute CONST = SDIMAX/0.02483133
     # ---------------------------------------------------------------------------
-    SDICAL(Int32(0), SDIMAX)
+    global SDIMAX = SDICAL(Int32(0))
     const_v = SDIMAX / Float32(0.02483133)
 
     if debug
@@ -419,7 +419,9 @@ function MORTS()
     if rip_last == rn_v; sumtre = t - tn10; end
     if sumtre < Float32(0.0); sumtre = Float32(0.0); end
     if tn10 >= Float32(0.1)
-        VARMRT(sumtre, debug, sumkil)
+        sumtre_r = Ref(sumtre); sumkil_r = Ref(sumkil)
+        VARMRT(sumtre_r, debug, sumkil_r)
+        sumkil = sumkil_r[]
     end
 
     # ---------------------------------------------------------------------------
@@ -432,7 +434,7 @@ function MORTS()
     ipass += Int32(1)
 
     for i in Int32(1):ITRN
-        p  = PROB[i] - WK2[i]
+        p  = max(Float32(0), PROB[i] - WK2[i])
         is = ISP[i]; d = DBH[i]
         if LZEIDE  && d < DBHZEIDE;  continue; end
         if !LZEIDE && d < DBHSTAGE; continue; end
@@ -446,8 +448,13 @@ function MORTS()
 
     if tn == Float32(0.0); @goto label_35; end
 
-    dq10n = sqrt(sd2sqn / tn)
-    if LZEIDE; dr10n = (sumdr10n / tn)^(Float32(1.0) / Float32(1.605)); end
+    _sd2sqn_tn = sd2sqn / tn
+    if _sd2sqn_tn < Float32(0); _sd2sqn_tn = Float32(0); end
+    dq10n = sqrt(_sd2sqn_tn)
+    _sumdr10n_tn = sumdr10n / tn
+    if LZEIDE
+        dr10n = _sumdr10n_tn >= Float32(0) ? _sumdr10n_tn^(Float32(1.0) / Float32(1.605)) : Float32(0)
+    end
 
     if debug
         @printf(io_units[JOSTND], "MORTS CHECK DIA. IPASS,DQ10,DR10 DQ10N,DR10N= %d %f %f %f %f\n",
@@ -775,6 +782,6 @@ end
 # ---------------------------------------------------------------------------
 # Stubs for subroutines called by MORTS
 # ---------------------------------------------------------------------------
-VARMRT(sumtre, debug, sumkil) = nothing
+# (VARMRT has a real implementation in sn/varmrt.jl — do NOT stub it here, or the
+#  typed call falls through to the stub and density mortality is never distributed.)
 MSBMRT(temeff, tmore, dlo, dhi, mfl, debug) = nothing
-SDICAL(mode, sdimax_ref)      = nothing

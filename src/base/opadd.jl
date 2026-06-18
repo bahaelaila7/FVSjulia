@@ -141,7 +141,7 @@ end
 
 function OPINCR(iy::AbstractVector{Int32}, icyc::Integer, ncyc::Integer)
     OPSORT(Int32(Int(IMGL)-1), IDATE, ISEQ, IOPSRT, false)
-    OPCYCL(Int32(ncyc), iy[1])
+    OPCYCL(Int32(ncyc), iy)   # Fortran OPCYCL(NCYC,IY(1)) passes the array from elt 1
     OPCSET(Int32(icyc))
     return nothing
 end

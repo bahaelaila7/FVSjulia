@@ -9,7 +9,7 @@ function DGSCOR(ssig::Real, frm_ref::Ref{Float32}, rho::Real, rhocp::Real, it::I
     frm = Float32(0)
     if DGSD >= Float32(1)
         @label label_20
-        frm = BACHLO(Float32(0), Float32(ssig), RANN)
+        frm = BACHLO(Float32(0), Float32(ssig))
         frm = Float32(frm) * Float32(rhocp) + Float32(rho) * OLDRN[it]
         if abs(frm) > DGSD * Float32(ssig)
             @goto label_20

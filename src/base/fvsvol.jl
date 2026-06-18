@@ -31,8 +31,76 @@ function NATCRS(tcf_ref::Ref{Float32}, mcf_ref::Ref{Float32}, scf_ref::Ref{Float
     bbfv_ref[] = Float32(0); vmax_ref[] = Float32(0); bfmax_ref[] = Float32(0)
     ctkflg_ref[] = false; btkflg_ref[] = false
 
-    # VOLINITNVB (NVEL library) not yet translated.
-    # Fallback: use Jenkins equations for biomass components.
+    # Merch top heights (HT1PRD/HT2PRD) from the R8 Clark profile, used for HT2TD.
+    local r8_sawht = 0.0f0
+    local r8_plpht = 0.0f0
+    local r8_isprod1 = false
+    local r8_ran = false
+    # Volume equations for Southern variant
+    if ispc >= 1 && ispc <= Int(MAXSP)
+        veq = VEQNNC[ispc]
+        vol15 = nothing
+        if length(veq) >= 10 && veq[1] == '8' && length(veq) >= 7 && veq[4:7] == "CLKE"
+            # R8 Clark equations (new since July 2021)
+            # fvsvol.f lines 168-207: PROD='01' (sawtimber) only when D >= SCFMIND
+            d_f = Float32(d)
+            if d_f >= Float32(SCFMIND[ispc])
+                prod  = "01"
+                stump = Float32(SCFSTMP[ispc])   # sawtimber stump height
+                mtopp = Float32(SCFTOPD[ispc])   # sawtimber top diam
+            else
+                prod  = "02"
+                stump = Float32(STMP[ispc])      # pulpwood stump height
+                mtopp = Float32(TOPD[ispc])      # pulpwood top diam
+            end
+            mtops = Float32(TOPD[ispc])
+            vol15, r8_sawht, r8_plpht = _R8CLARK_VOL(veq, d_f, Float32(h),
+                                  mtopp, mtops, stump, prod)
+            r8_isprod1 = prod == "01"
+            r8_ran = true
+        elseif length(veq) >= 6 && veq[1] == 'S' && veq[4:6] == "SRS"
+            vol15 = zeros(Float32, 15)
+            bf_r  = Ref(BFMIND[ispc])
+            ef_r  = Ref(Int32(0))
+            SRS_VOL(veq, Float32(d), Float32(h), bf_r, vol15, ef_r)
+            BFMIND[ispc] = bf_r[]
+            ef_r[] != Int32(0) && (vol15 = nothing)
+        end
+        if vol15 !== nothing
+            tcf_ref[]    = vol15[1]
+            # MCF only when D >= DBHMIN (fvsvol.f 512); else 0 (small trees below
+            # merch DBH still get a Clark vol[4] but must not be counted as merch).
+            mcf_ref[]    = Float32(d) >= Float32(DBHMIN[ispc]) ? vol15[4] + vol15[7] : Float32(0)
+            # SCF = sawtimber cubic = TVOL(4) when D >= SCFMIND (fvsvol.f 514-516);
+            # NOT gated on topwood (vol[7]), else short sawtimber trees report 0.
+            scf_ref[]    = Float32(d) >= Float32(SCFMIND[ispc]) ? vol15[4] : Float32(0)
+            bbfv_ref[]   = vol15[10]
+            vmax_ref[]   = vol15[1]
+            # BFMAX is the cubic VMAX for the BEHPRM taper hyperbola (fvsvol.f 511:
+            # IF(BFMAX.EQ.0) BFMAX=VMAX; VMAX=TCF=total cubic), NOT the board feet —
+            # using board feet over-reduces topkilled trees in BFTOPK.
+            bfmax_ref[]  = vol15[1]
+            ctkflg_ref[] = vol15[1] > 0.0f0
+            btkflg_ref[] = vol15[10] > 0.0f0
+        end
+
+        # Store merchantable top heights HT2TD (fvsvol.f 337-339).
+        # HT2TD(:,2)=Ht2TDCF = MAX(HT1PRD, HT2PRD); HT2TD(:,1)=Ht2TDBF = HT1PRD when
+        # board-foot and sawtimber merch specs are identical (BFPFLG=1).
+        if r8_ran && it > 0 && Float32(d) >= Float32(DBHMIN[ispc])
+            local ht1prd = r8_isprod1 ? r8_sawht : r8_plpht
+            local ht2prd = r8_plpht
+            HT2TD[it, 2] = max(ht1prd, ht2prd)
+            local bfpflg = Float32(d) >= Float32(BFMIND[ispc]) &&
+                           VEQNNB[ispc] == VEQNNC[ispc] &&
+                           BFMIND[ispc] == SCFMIND[ispc] &&
+                           BFSTMP[ispc] == SCFSTMP[ispc] &&
+                           BFTOPD[ispc] == SCFTOPD[ispc]
+            if bfpflg; HT2TD[it, 1] = ht1prd; end
+        end
+    end
+
+    # Jenkins equations for biomass components (always run regardless of volume path)
     biomas = biodryin  # should be AbstractVector{Float32} of length 15
     if biomas isa AbstractVector && length(biomas) >= 8
         # Get FIA species code for this species slot

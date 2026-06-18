@@ -258,6 +258,8 @@ include("base/update.jl") # UPDATE: add growth, deduct mortality, call VOLS, adv
 include("base/damcds.jl")  # DAMCDS: dispatch damage codes to base model + store in DAMSEV
 include("base/dampro.jl")  # DAMPRO: dispatch damage codes to extension handlers for all trees
 include("base/wdbkwt_data.jl") # WDBKWT: 2677-species wood/bark weight table for Jenkins biomass
+include("base/fia_se_vol.jl") # SRS_VOL: FIA Southern Research Station volume equations (fia_se_vol.for)
+include("base/r8clark_vol.jl") # _R8CLARK_VOL: R8 New Clark volume equations (r8prep.f + r9clark.f)
 include("base/fvsvol.jl")   # NATCRS/OCFVOL/OBFVOL/GETEQN: variant-specific volume entry points
 include("base/behprm.jl")  # BEHPRM: compute Behre hyperbola taper params AHAT/BHAT
 include("base/cfvol.jl")   # CFVOL: cubic foot volume by user-defined equation (CFVOLEQ keyword)
@@ -274,6 +276,17 @@ include("base/rcon.jl")   # RCON: load site-dependent coefficients (calls DGCONS
 include("sn/dgbnd.jl")   # DGBND: diameter growth bounds check (90-species DLODHI array)
 include("base/regent.jl") # REGENT/REGCON: small-tree height/diameter growth + calibration
 include("base/cratet.jl") # CRATET: calibration, height dubbing, crown dubbing, age estimation
+include("base/esinit.jl") # ESINIT/ESEZCR: regeneration establishment model init (estb extension)
+include("base/esin.jl")   # ESIN: establishment keyword processor (PLANT/NATURAL/ESTAB/END)
+include("base/esplt.jl")  # ESPLT1/ESPLT2: establishment plot setup (NPTIDS/IPTIDS/site vars)
+include("base/esnutr.jl") # ESNUTR: per-cycle establishment driver (calls ESTAB)
+include("base/essprt.jl") # ESSPRT/NSPREC/SPRTHT/ASSPTN: stump-sprout helpers
+include("base/esuckr.jl") # ESUCKR: create stump & root sprouts from cut trees
+include("base/estab_helpers.jl") # ESSUBH/ESPREP/ESTIME/ESETPR/ESGENT (ESTAB helpers)
+include("base/estab.jl")  # ESTAB: regeneration establishment tree creation (PLANT path)
+# (ESUCKR is never called for snt01 — loblolly doesn't sprout, ITRNRM stays 0 — so
+#  its stub is fine. ESTAB is still stubbed: BARE reaches it but creates no trees
+#  yet; non-establishment stands take the no-op path through ESNUTR.)
 include("sn/habtyp.jl")   # HABTYP/HBDECD: habitat type decoder (320 sn ecological unit codes)
 include("sn/forkod.jl")   # FORKOD: forest/district code translation (sn variant, 20 national forests + R9)
 include("sn/nbolt.jl")    # NBOLT: number of 8-ft bolts to sawtimber/pulpwood top (Ek et al. 1984)
@@ -312,6 +325,8 @@ include("extensions/dbs/dbsqlite.jl")    # SQLite output tables (DBS extension)
 include("extensions/fiavbc/fiavbc.jl")   # FIAVBC biomass (stub)
 include("extensions/fire/fire.jl")       # Fire simulation (stub)
 include("extensions/pests/pests.jl")     # Pest models (stub)
+include("extensions/econ/ecin.jl")       # Economics keyword reader (ECIN)
+include("extensions/econ/eccalc.jl")     # Economics ECSETP/ECSTATUS/ECCALC
 
 # ---------------------------------------------------------------------------
 # 17b. Tree list output — must load after extensions so _dbs_out_db etc. are defined

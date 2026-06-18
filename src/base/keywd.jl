@@ -249,6 +249,16 @@ function FNDKEY(keywrd::AbstractString, table::AbstractVector{String},
     return Int32(0), Int32(1)
 end
 
+# 7-arg Fortran-style FNDKEY: (number_r, keywrd, table, kwcnt, kode_r, lkecho, iout)
+function FNDKEY(number_r::Ref{Int32}, keywrd::AbstractString,
+                table::AbstractVector{String}, kwcnt::Integer,
+                kode_r::Ref{Int32}, lkecho::Bool, iout::Integer)
+    (num, kode) = FNDKEY(keywrd, table, Int32(iout))
+    number_r[] = num
+    kode_r[]   = kode
+    return nothing
+end
+
 """
     KEYOPN(iread, jostnd, irecnt, keywrd, array, kard)
 

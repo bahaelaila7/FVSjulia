@@ -5,8 +5,12 @@
 # that would require translating all of FVS state to/from binary.  For now,
 # those paths are stubbed — the normal run-to-completion path is fully functional.
 
-function putstd(); return nothing; end   # stub: serialize stand state
-function getstd(); return nothing; end   # stub: deserialize stand state
+# Serialize / deserialize the full stand state to the stash file.
+# The real work lives in PUTSTD()/GETSTD() (base/putstd.jl, base/getstd.jl),
+# which pack every COMMON-block global into the WK3 buffer via the BFWRIT/
+# BFREAD helpers and flush through STASH/DSTASH to units jstash/jdstash.
+function putstd(); PUTSTD(); return nothing; end
+function getstd(); GETSTD(); return nothing; end
 
 function fvsSetCmdLine(theCmdLine::AbstractString, lenCL::Integer, irtncd_ref::Ref{Int32})
     # Reset global state
@@ -14,7 +18,7 @@ function fvsSetCmdLine(theCmdLine::AbstractString, lenCL::Integer, irtncd_ref::R
         FILClose()
     end
 
-    genrpt()
+    GENRPT()
 
     global keywordfile = ""
     global maxStoppts  = Int32(7)
@@ -84,7 +88,7 @@ function fvsSetCmdLine(theCmdLine::AbstractString, lenCL::Integer, irtncd_ref::R
 
     if restartcode != 0
         if !isempty(keywordfile)
-            println("Specifying a keyword file conflicts with using a restart file; keyword file is ignored.")
+            println(stderr, "Specifying a keyword file conflicts with using a restart file; keyword file is ignored.")
             global keywordfile = ""
         end
         global jdstash = Int32(72)
@@ -101,10 +105,10 @@ function fvsSetCmdLine(theCmdLine::AbstractString, lenCL::Integer, irtncd_ref::R
             global keywordfile    = kf
             global originalRestartCode = restartcode
             global stopstatcd = Int32(1)
-            @printf(stdout, " Restarting from file=%s Year=%5d Stop point code=%2d\n",
+            @printf(stderr, " Restarting from file=%s Year=%5d Stop point code=%2d\n",
                 restartfile, oldstopyr, restartcode)
         catch e
-            println("Restart open error on file=", restartfile, ": ", e)
+            println(stderr, "Restart open error on file=", restartfile, ": ", e)
             global fvsRtnCode = Int32(1)
             irtncd_ref[] = fvsRtnCode
             return nothing
@@ -116,20 +120,22 @@ function fvsSetCmdLine(theCmdLine::AbstractString, lenCL::Integer, irtncd_ref::R
         try
             io_stash = open(stopptfile, "w")
             io_units[Int32(71)] = io_stash
-            @printf(stdout, " Stop point code=%2d Year=%5d File= %s\n",
+            @printf(stderr, " Stop point code=%2d Year=%5d File= %s\n",
                 majorstopptcode, majorstopptyear, stopptfile)
         catch e
-            println("Stop point open error on file=", stopptfile, ": ", e)
+            println(stderr, "Stop point open error on file=", stopptfile, ": ", e)
             global fvsRtnCode = Int32(1)
             irtncd_ref[] = fvsRtnCode
             return nothing
         end
     elseif majorstopptcode != 0
-        @printf(stdout, " Stop point code=%2d Year=%5d Will stop without saving data.\n",
+        @printf(stderr, " Stop point code=%2d Year=%5d Will stop without saving data.\n",
             majorstopptcode, majorstopptyear)
     end
 
     @label label_100
+    # Bridge API variable → CONTRL common block so FILOPN can read it
+    global KWDFIL = keywordfile
     FILOPN()
     rtncd = Ref(Int32(0)); fvsGetRtnCode(rtncd)
     irtncd_ref[] = rtncd[]

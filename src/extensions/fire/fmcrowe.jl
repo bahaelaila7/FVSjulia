@@ -6,7 +6,7 @@
 function FMCROWE(spils::Integer, spiyv::Integer, d_in::Real, h_in::Real,
                   ic::Integer, sg::Real, xv::AbstractVector{Float32})
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMCROWE", Int32(7), ICYC)
+    debug = DBCHK(false, "FMCROWE", Int32(7), ICYC)
     if debug
         @printf(get(io_units, Int32(JOSTND), stdout), " ENTERING FMCROWE\n")
     end
@@ -168,10 +168,12 @@ function FMCROWE(spils::Integer, spiyv::Integer, d_in::Real, h_in::Real,
                 umbtw[j] = Float32(sg) * temp / P2T
             end
         end
-        # Add stem below 4.5 ft (cylinder approximation)
+        # Add stem below 4.5 ft (cylinder approximation).
+        # NOTE: Fortran (fmcrowe.f:460) adds the raw TEMP here, NOT sg*TEMP/P2T
+        # (unlike the umbtw assignments above) — match the reference exactly.
         temp = mypi * d^2 / 4.0f0 / 144.0f0 * min(4.5f0, h)
         local k::Int = d <= 0.25f0 ? 1 : d <= 1.0f0 ? 2 : d <= 3.0f0 ? 3 : 4
-        for j in k:4; umbtw[j] += Float32(sg) * temp / P2T; end
+        for j in k:4; umbtw[j] += temp; end
     end
 
     # Clamp all proportions

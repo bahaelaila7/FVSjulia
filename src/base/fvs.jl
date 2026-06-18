@@ -133,9 +133,8 @@ function FVS!(irtncd::Ref{Int32})
     @label label_19
 
     # Calibrate growth functions; fill gaps; crown width for Weibull variants
-    stagea = Float32(0.0); stageb = Float32(0.0)
-    SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1),
-           SDIAC, SDIAC2, stagea, stageb, Int32(0))
+    (sdiac_v, sdiac2_v, stagea, stageb) = SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1), Int32(0))
+    global SDIAC = sdiac_v; global SDIAC2 = sdiac2_v
     CRATET()
 
     # Flag best tree records for estab model
@@ -318,9 +317,8 @@ function FVS!(irtncd::Ref{Int32})
     global ODR016  = DR016
     global RELDM1  = RELDEN
 
-    stagea = Float32(0.0); stageb = Float32(0.0)
-    SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1),
-           SDIBC, SDIBC2, stagea, stageb, Int32(0))
+    (sdibc_v, sdibc2_v, stagea, stageb) = SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1), Int32(0))
+    global SDIBC = sdibc_v; global SDIBC2 = sdibc2_v
     global SDIAC  = SDIBC
     global SDIAC2 = SDIBC2
 
@@ -355,13 +353,20 @@ FVS(r) = FVS!(r)
 # ---------------------------------------------------------------------------
 # fvsGetRtnCode/fvsSetRtnCode defined in base/filopn.jl
 # fvsSetCmdLine defined in base/cmdline.jl
-# fvsRestart/fvsStopPoint/getAmStopping defined in base/cmdline.jl (Ref-arg versions)
-# These 0/1-arg wrappers are kept here for the FVS! call sites that use them that way:
+# fvsRestart/fvsStopPoint/getAmStopping defined in base/cmdline.jl (Ref-arg versions).
+# These 0/1-arg wrappers delegate to those real versions and surface the return code
+# the FVS! call sites expect (they previously returned 0, disabling stop/restart).
 DBCHK_FVS(d)        = nothing          # debug mode toggle (no-op; DBCHK handles via ENV)
-fvsRestart()        = Int32(0)         # 0-arg wrapper used in FVS! cycle check
-fvsStopPoint(n)     = Int32(0)         # 1-arg wrapper (stop code check)
-getAmStopping()     = Int32(0)         # 0-arg wrapper
-ClearRestartCode()  = nothing
+function fvsRestart()
+    r = Ref(Int32(0)); fvsRestart(r); return r[]
+end
+function fvsStopPoint(n)
+    r = Ref(Int32(0)); fvsStopPoint(Int32(n), r); return r[]
+end
+function getAmStopping()
+    r = Ref(Int32(0)); getAmStopping(r); return r[]
+end
+ClearRestartCode()  = clearrestartcode()
 SVSTART()           = nothing          # SVS animation start (SVS not translated)
 BWEOUT()            = nothing          # budworm/bark beetle output (pest not translated)
 # All other stubs live in base/extstubs.jl or their own .jl files:

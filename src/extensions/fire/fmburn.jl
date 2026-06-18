@@ -11,7 +11,7 @@ function FMBURN(iyr::Integer, fmd::Integer, lnmout::Bool)
     # fmd is an output in Fortran (set by FMCFMD/FMCFMD3 internally); use a local ref
     local fmd_ref = Ref(Int32(fmd))
     local debug::Bool = false
-    DBCHK(Ref(debug), "FMBURN", Int32(6), ICYC)
+    debug = DBCHK(false, "FMBURN", Int32(6), ICYC)
     if debug
         @printf(io_units[Int32(JOSTND)], " FMBURN CYCLE=%2d IYR=%5d\n", ICYC, iyr)
     end
@@ -119,7 +119,7 @@ function FMBURN(iyr::Integer, fmd::Integer, lnmout::Bool)
     end
 
     # Load fuel model info
-    FMCFMD3(Int32(iyr), Int32(fmd_ref[]))
+    FMCFMD3(Int32(iyr), fmd_ref)
 
     # Re-check for SIMFIRE keyword (2506) — get actual fire parameters
     icond = Int32(0)

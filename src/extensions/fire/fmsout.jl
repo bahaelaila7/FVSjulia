@@ -64,7 +64,7 @@ function FMSOUT(iyr::Integer)
         if DENIH[ii] > 0.0f0
             tempv_ref[] = 0.0f0
             FMSVOL(ii, HTIH[ii], tempv_ref, false, Int32(0))
-            if HARD[ii]
+            if HARD_FM[ii]
                 snvolh = tempv_ref[] * DENIH[ii]
             else
                 snvols += tempv_ref[] * DENIH[ii]
@@ -86,7 +86,7 @@ function FMSOUT(iyr::Integer)
         totds[idc, jyr, jcl]  += DENIS[ii]
         tothts[idc, jyr, jcl] += HTIS[ii] * DENIS[ii]
 
-        if HARD[ii]
+        if HARD_FM[ii]
             totdh[idc, jyr, jcl]  += DENIH[ii]
             tothth[idc, jyr, jcl] += HTIH[ii] * DENIH[ii]
         else
@@ -144,8 +144,8 @@ function FMSOUT(iyr::Integer)
                     iyr, JSP[idc], jcl,
                     totdbh[idc, jyr, jcl],
                     tothth[idc, jyr, jcl], tothts[idc, jyr, jcl],
-                    Int(totvlh[idc, jyr, jcl]), Int(totvls[idc, jyr, jcl]),
-                    Int(totvlh[idc, jyr, jcl] + totvls[idc, jyr, jcl]),
+                    trunc(Int, totvlh[idc, jyr, jcl]), trunc(Int, totvls[idc, jyr, jcl]),
+                    trunc(Int, totvlh[idc, jyr, jcl] + totvls[idc, jyr, jcl]),
                     iyr - jyr + 1,
                     totdh[idc, jyr, jcl], totds[idc, jyr, jcl], totn)
             end

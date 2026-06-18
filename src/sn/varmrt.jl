@@ -72,6 +72,8 @@ function VARMRT(tokill::Ref{Float32}, debug::Bool, sumkil::Ref{Float32})
             temkil = short_v
         end
         iswtch = 0
+        temsum = Float32(0.0)   # visible after the inner loop (used at label 110)
+        adjust = Float32(0.0)
 
         # inner loop: adjust NPASS until ADJUST is in [0.8, 1.2] (Fortran label 105)
         while true

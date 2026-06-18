@@ -72,7 +72,7 @@ function DBSTRLS(iwho::Integer, kode_ref::Ref{Int32}, tem::Float32)
         _dbs_exec(db, "CREATE INDEX IF NOT EXISTS idx_trls_stand ON $tblname(CaseID,StandID,Year);")
     else
         # ensure SCuFt column exists (added with NVB upgrade 2024)
-        try; _dbs_exec(db, "ALTER TABLE $tblname ADD COLUMN SCuFt real"); catch; end
+        _dbs_add_column(db, tblname, "SCuFt", "real")
     end
 
     caseid_s  = CASEID
@@ -202,8 +202,9 @@ function DBSTRLS(iwho::Integer, kode_ref::Ref{Int32}, tem::Float32)
         end
     end
 
+    DBInterface.close!(stmt)
+    SQLite.finalize_statements!(db)   # clear any dangling cursor left by a prior writer
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end
 
@@ -268,7 +269,7 @@ function DBSATRTLS(iwho::Integer, kode_ref::Ref{Int32}, tem::Float32)
               Ht2TDBF real null,
               TreeAge real null
             );""")
-        try; _dbs_exec(db, "ALTER TABLE $tblname ADD COLUMN SCuFt real"); catch; end
+        _dbs_add_column(db, tblname, "SCuFt", "real")
     end
 
     caseid_s  = CASEID
@@ -338,8 +339,9 @@ function DBSATRTLS(iwho::Integer, kode_ref::Ref{Int32}, tem::Float32)
             ])
         end
     end
+    DBInterface.close!(stmt)
+    SQLite.finalize_statements!(db)   # clear any dangling cursor left by a prior writer
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end
 
@@ -405,7 +407,7 @@ function DBSCUTS(iwho::Integer, kode_ref::Ref{Int32})
               Ht2TDBF real null,
               TreeAge real null
             );""")
-        try; _dbs_exec(db, "ALTER TABLE $tblname ADD COLUMN SCuFt real"); catch; end
+        _dbs_add_column(db, tblname, "SCuFt", "real")
     end
 
     caseid_s  = CASEID
@@ -475,8 +477,9 @@ function DBSCUTS(iwho::Integer, kode_ref::Ref{Int32})
             ])
         end
     end
+    DBInterface.close!(stmt)
+    SQLite.finalize_statements!(db)   # clear any dangling cursor left by a prior writer
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end
 
@@ -734,7 +737,8 @@ function DBS_FIAVBC_TRLS()
         end
     end
 
+    DBInterface.close!(stmt)
+    SQLite.finalize_statements!(db)   # clear any dangling cursor left by a prior writer
     DBInterface.execute(db, "COMMIT;")
-    SQLite.close(stmt)
     return nothing
 end

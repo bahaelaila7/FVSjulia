@@ -82,9 +82,10 @@ function FMSVOL(ii::Integer, xht::Real, vol2ht_ref::Ref{Float32}, debug::Bool, i
 end
 
 function FMSVL2(jsp::Integer, xd::Real, xh::Real, xht::Real,
-                vol2ht_ref::Ref{Float32}, crwnrto::Integer, livedead::AbstractString,
+                vol2ht_ref::Ref{Float32}, crwnrto::Integer,
+                livedead::Union{AbstractString,AbstractChar},
                 lmerchin::Bool, debug::Bool, iout::Integer)
-    local lvd::String = LFIANVB ? String(livedead) : " "
+    local lvd::String = LFIANVB ? string(livedead) : " "   # string() handles Char or String
     _fmsvol_shared(Int(jsp), Float32(xd), Float32(xh), Float32(xht),
                    lmerchin, crwnrto, lvd, debug, iout, vol2ht_ref)
     return nothing

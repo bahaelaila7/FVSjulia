@@ -24,6 +24,10 @@ function _init_outcom_chars!()
     end
 end
 
+# Initialize at module load so these are never #undef (PUTSTD/CHPUT reads them
+# before any DISPLY output has populated the species labels).
+_init_outcom_chars!()
+
 # Integer arrays
 const IOICR  = zeros(Int32, 6)           # example tree ICR values
 const IOSUM  = zeros(Int32, 22, MAXCY1)  # summary output stored by cycle(41) x attribute(22)

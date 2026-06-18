@@ -6,7 +6,7 @@
 # FMPOFL_NPROB: Adams (1969) standard normal CDF (double precision).
 # Called from: FMMAIN
 
-function FMPOFL(iyr::Integer)
+function FMPOFL(iyr::Integer, fmd::Integer=Int32(0), lnmout::Bool=true)
     debug = DBCHK("FMPOFL", 6, ICYC)
 
     # Year gate
@@ -26,46 +26,98 @@ function FMPOFL(iyr::Integer)
 
     local irtncd_ref = Ref(Int32(0))
 
-    # Three wind/moisture scenarios: FMOIS=1 (high), FMOIS=3 (low) → step 2 (1,3)
-    local iscen = 0
+    # Per-scenario potential-fire results, indexed by FMOIS (1=severe, 3=moderate)
+    local pokill = zeros(Float32, 4)   # mortality fraction by FMOIS
+    local povolk = zeros(Float32, 2)   # volume killed by IK
+    local psmoke = zeros(Float32, 2)   # smoke (PM2.5) by IK
+
+    # Canopy wind-reduction multiplier (fmpofl.f:81 — same as FMBURN)
+    local wmult = ALGSLP(PERCOV, CANCLS, CORFAC, Int32(4))
+    # Dominant fuel model for the scenario (set by FMCFMD below)
+    local fmd_ref = Ref(Int32(0))
+    # Severe-case fuel models/weights, saved during FMOIS=1 (fmpofl.f:230-236)
+    local sfmod = zeros(Int32, 4)
+    local sfwt  = zeros(Float32, 4)
+
+    # Three wind/moisture scenarios: FMOIS=1 (severe), FMOIS=3 (moderate) → step 2 (1,3)
     for fmois in 1:2:3
-        iscen += 1
         local idpl = fmois == 3 ? 2 : 1
 
-        # Override wind with scenario wind
+        # Scenario wind, moisture preset, and PRESVL overrides (fmpofl.f:111-125)
         swind[fmois] = round(Int32, PREWND[idpl])
-        local save_wndspd = WNDSPD
-        global WNDSPD = Float32(swind[fmois])
+        FMMOIS(Int32(fmois), MOIS)
+        if PRESVL[idpl, 1] == 1.0f0
+            MOIS[1, 1] = PRESVL[idpl, 2]
+            MOIS[1, 2] = PRESVL[idpl, 3]
+            MOIS[1, 3] = PRESVL[idpl, 4]
+            MOIS[1, 4] = PRESVL[idpl, 5]
+            MOIS[1, 5] = PRESVL[idpl, 6]
+            MOIS[2, 1] = PRESVL[idpl, 7]
+            MOIS[2, 2] = PRESVL[idpl, 8]
+        end
+        # FMFINT reads the canopy-adjusted wind FWIND, not WNDSPD (fmpofl.f:125)
+        global FWIND = Float32(swind[fmois]) * wmult
 
-        FMMOIS(Int32(fmois))
-        FMFINT(Int32(0), Int32(0))
+        # Set up the (departure) fuel model for this scenario — SN variant path
+        # (fmpofl.f:132-141). Without this FMFINT has no fuel loads and returns 0.
+        if Int(IFLOGIC) == 0 && VARACD in ("CR", "CS", "LS", "SN", "TT", "UT")
+            FMCFMD(Int32(iyr), fmd_ref)
+        end
+
+        # Byram's fireline intensity + flame length for this scenario
+        local byram_ref = Ref(Float32(0))
+        local flame_ref = Ref(Float32(0))
+        local hpa_ref   = Ref(Float32(0))
+        FMFINT(Int32(iyr), byram_ref, flame_ref, Int32(fmois), hpa_ref, Int32(1))
         fvsGetRtnCode(irtncd_ref)
         if irtncd_ref[] != Int32(0)
-            global WNDSPD = save_wndspd
             return nothing
         end
-        FMCFIR(Int32(0))
-        FMEFF(Int32(0))
-        FMCONS(Int32(0))
 
-        if sn_cs
-            # SN/CS: no crown fire, force surface only
-            global CRBURN   = 0.0f0
-            local cftype_tmp = Int32(-1)
-            oinit1[iscen]   = FINT
-            oact1[iscen]    = FINT
-            oinit2[iscen]   = 0.0f0
-            oact2[iscen]    = 0.0f0
-        else
-            oinit1[iscen] = FINT
-            oact1[iscen]  = FINT
-            oinit2[iscen] = CRBURN
-            oact2[iscen]  = CRBURN
+        # PFLAM(FMOIS) and PFLAM(FMOIS+1) hold the (surface) flame length
+        pflam[fmois]   = flame_ref[]
+        pflam[fmois+1] = flame_ref[]
+
+        # Scorch height (fmpofl.f:161-163) — read by FMEFF for crown scorch.
+        # Convert Byram intensity to BTU/ft/s first.
+        local byr = byram_ref[] / 60.0f0
+        global SCH = (63.0f0 / (140.0f0 - POTEMP[idpl])) *
+                     (byr^(7.0f0 / 6.0f0) / sqrt(byr + FWIND^3.0f0))
+
+        # SN/CS variants: surface fire only — no crown fire
+        global CRBURN = 0.0f0
+        local ik = fmois == 3 ? 2 : 1
+        oinit1[ik] = -1.0f0
+        oact1[ik]  = -1.0f0
+
+        # Potential mortality (BA fraction) and volume killed from FMEFF
+        local pomort_ref = Ref(Float32(0))
+        local povolk_ref = Ref(Float32(0))
+        local fmd_use = fmd_ref[] > 0 ? fmd_ref[] :
+                        ((length(FMOD) >= 1 && FMOD[1] > 0) ? Int32(FMOD[1]) : Int32(8))
+        # POTPAB(IK) = percent area burned (default 100) — gates per-tree mortality
+        FMEFF(Int32(iyr), fmd_use, pflam[fmois], Int32(1),
+              pomort_ref, povolk_ref, Int32(1), POTPAB[ik])
+        fvsGetRtnCode(irtncd_ref)
+        if irtncd_ref[] == Int32(0)
+            pokill[fmois] = pomort_ref[]
+            povolk[ik]    = povolk_ref[]
+            # Potential smoke production (PM2.5)
+            local psmoke_ref = Ref(Float32(0))
+            FMCONS(Int32(fmois), Int32(0), Float32(0.0), Int32(iyr), Int32(1),
+                   psmoke_ref, POTPAB[ik])
+            fvsGetRtnCode(irtncd_ref)
+            psmoke[ik] = irtncd_ref[] == Int32(0) ? psmoke_ref[] : 0.0f0
         end
+        fvsSetRtnCode(Int32(0))
 
-        pflam[iscen] = FINT > 0.0f0 ? 1.0f0 : 0.0f0
-
-        global WNDSPD = save_wndspd
+        # Save the severe-case fuel models (FMOIS=1); moderate uses live FMOD/FWT
+        if fmois == 1
+            for k in 1:min(4, length(FMOD))
+                sfmod[k] = FMOD[k]
+                sfwt[k]  = FWT[k]
+            end
+        end
     end
 
     # Torching probability
@@ -82,47 +134,51 @@ function FMPOFL(iyr::Integer)
     EVSET4(Int32(26), ptr1_ref[])
     EVSET4(Int32(27), ptr2_ref[])
 
-    if !LNMOUT; return nothing; end
+    if !lnmout; return nothing; end
 
-    # Open potential fire output file if needed
+    # ── Database output — written before (and independent of) the text report
+    #    file, matching the Fortran order (DBSFMPF precedes GETLUN(JPOTFL)). ──
+    if Int(ICYC) == 1
+        # FVS_PotFire_Cond: one row per scenario (idpm 1=Severe wild, 2=Moderate pres)
+        for idpm in 1:2
+            local m = idpm == 2 ? Int32(3) : Int32(1)
+            FMMOIS(m, MOIS)
+            if PRESVL[idpm, 1] == 1.0f0
+                MOIS[1,1] = PRESVL[idpm,2]; MOIS[1,2] = PRESVL[idpm,3]
+                MOIS[1,3] = PRESVL[idpm,4]; MOIS[1,4] = PRESVL[idpm,5]
+                MOIS[1,5] = PRESVL[idpm,6]; MOIS[2,1] = PRESVL[idpm,7]
+                MOIS[2,2] = PRESVL[idpm,8]
+            end
+            DBSFMPFC(NPLT, Float64(PREWND[idpm]), round(Int, POTEMP[idpm]),
+                     100.0*MOIS[1,1], 100.0*MOIS[1,2], 100.0*MOIS[1,3],
+                     100.0*MOIS[1,4], 100.0*MOIS[1,5], 100.0*MOIS[2,1],
+                     100.0*MOIS[2,2], idpm)
+        end
+    end
+    # FVS_PotFire_East row: flame (severe/moderate), canopy ht/density,
+    # mortality (BA %, volume), and smoke (severe/moderate).
+    DBSFMPF(iyr,
+            pflam[2], pflam[4],                       # Flame_Len_Sev / _Mod
+            Int(ACTCBH), Float64(CBD),                # Canopy_Ht / Canopy_Density
+            trunc(Int, pokill[1] * 100.0f0), trunc(Int, pokill[3] * 100.0f0),  # Mortality_BA_Sev/_Mod
+            trunc(Int, povolk[1]), trunc(Int, povolk[2]),   # Mortality_VOL_Sev/_Mod
+            Float64(psmoke[1]) * Float64(P2T), Float64(psmoke[2]) * Float64(P2T),  # Pot_Smoke_Sev/_Mod
+            FMOD, FWT, sfmod, sfwt)                    # moderate (live FMOD/FWT) / severe (saved)
+
+    # ── Text report file (skipped when no JPOTFL unit is open) ──
     local jpf = Int(JPOTFL)
     if jpf <= 0 || !haskey(io_units, Int32(jpf))
         return nothing
     end
     local io = io_units[Int32(jpf)]
-
-    # Write header (first call of this stand)
     if Int(ICYC) == 1
-        if sn_cs
-            @printf(io, "1%s\n", repeat(" ", 132))
-            @printf(io, " %s POTENTIAL FIRE BEHAVIOR\n", MGMID[1:min(end,26)])
-            @printf(io, "%s\n", repeat("-", 132))
-        else
-            @printf(io, "1%s\n", repeat(" ", 132))
-            @printf(io, " %s POTENTIAL FIRE BEHAVIOR\n", MGMID[1:min(end,26)])
-            @printf(io, "%s\n", repeat("-", 132))
-        end
-        DBSFMPFC(iyr)
+        @printf(io, "1%s\n", repeat(" ", 132))
+        @printf(io, " %s POTENTIAL FIRE BEHAVIOR\n", MGMID[1:min(end,26)])
+        @printf(io, "%s\n", repeat("-", 132))
     end
-
-    # Write per-year row
-    if sn_cs
-        # Format 51 (SN/CS): two columns surface only
-        local snfms1 = round(Int32, oact1[1])
-        local snfms2 = round(Int32, oact1[2])
-        @printf(io,
-            " %4d  %6.0f %6.0f  %6.2f %6.2f  %6.4f %6.4f\n",
-            iyr, oact1[1], oact1[2], pflam[2], pflam[4], ptr1_ref[], ptr2_ref[])
-    else
-        # Format 49 (other variants): surface + crown
-        @printf(io,
-            " %4d  %6.0f %6.0f  %6.0f %6.0f  %6.2f %6.2f  %6.4f %6.4f\n",
-            iyr, oact1[1], oact1[2], oact2[1], oact2[2],
-            pflam[2], pflam[4], ptr1_ref[], ptr2_ref[])
-    end
-
-    DBSFMPF(iyr, oact1[1], oact1[2], oact2[1], oact2[2],
-            pflam[2], pflam[4], ptr1_ref[], ptr2_ref[])
+    @printf(io,
+        " %4d  %6.0f %6.0f  %6.2f %6.2f  %6.4f %6.4f\n",
+        iyr, oact1[1], oact1[2], pflam[2], pflam[4], ptr1_ref[], ptr2_ref[])
 
     if debug
         @printf(get(io_units, Int32(JOSTND), stdout),
@@ -170,7 +226,7 @@ function FMPOFL_FMPTRH(iyr::Integer, mxi_in::Integer, fmprob::AbstractVector{Flo
             if tpa_i <= 0.0f0; continue; end
             # Stochastic inclusion
             local frac = tpa_i - floor(tpa_i)
-            local n    = Int(floor(tpa_i)) + (RANN() < Double64(frac) ? 1 : 0)
+            local n    = Int(floor(tpa_i)) + (RANN() < Float64(frac) ? 1 : 0)
             for _ in 1:n
                 push!(plot_trees, ii)
             end

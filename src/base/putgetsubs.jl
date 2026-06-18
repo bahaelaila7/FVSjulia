@@ -13,7 +13,7 @@
 # ---------------------------------------------------------------------------
 # BFREAD: read ILEN Float32 values from buffer; reload from stash when empty
 function BFREAD(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, varble::AbstractVector{Float32},
+                ilimit::Integer, varble::AbstractArray{Float32},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(ilimit); end
     if ilen < 1; return nothing; end
@@ -31,7 +31,7 @@ end
 
 # BFWRIT: write ILEN Float32 values to buffer; flush to stash when full
 function BFWRIT(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, varble::AbstractVector{Float32},
+                ilimit::Integer, varble::AbstractArray{Float32},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(0); end
     if ilen >= 1
@@ -87,7 +87,7 @@ end
 # ---------------------------------------------------------------------------
 # LFREAD: read ILEN Bool values via Float32 bit reinterpretation
 function LFREAD(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, lvar::AbstractVector{Bool},
+                ilimit::Integer, lvar::AbstractArray{Bool},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(ilimit); end
     if ilen < 1; return nothing; end
@@ -106,7 +106,7 @@ end
 
 # LFWRIT: write ILEN Bool values via Float32 bit reinterpretation
 function LFWRIT(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, lvar::AbstractVector{Bool},
+                ilimit::Integer, lvar::AbstractArray{Bool},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(0); end
     if ilen >= 1
@@ -127,7 +127,7 @@ end
 # ---------------------------------------------------------------------------
 # IFREAD: read ILEN Int32 values via Float32 bit reinterpretation
 function IFREAD(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, ivar::AbstractVector{Int32},
+                ilimit::Integer, ivar::AbstractArray{Int32},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(ilimit); end
     if ilen < 1; return nothing; end
@@ -146,7 +146,7 @@ end
 
 # IFWRIT: write ILEN Int32 values via Float32 bit reinterpretation
 function IFWRIT(buffer::AbstractVector{Float32}, ipnt_ref::Ref{Int32},
-                ilimit::Integer, ivar::AbstractVector{Int32},
+                ilimit::Integer, ivar::AbstractArray{Int32},
                 ilen::Integer, ibegin::Integer)
     if ibegin == 1; ipnt_ref[] = Int32(0); end
     if ilen >= 1

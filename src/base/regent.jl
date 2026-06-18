@@ -64,8 +64,12 @@ function REGENT(lestb::Bool, itrnin::Integer)
     # ---------------------------------------------------------------------------
     # Growth prediction section
     # ---------------------------------------------------------------------------
-    xrhmlt = Vector{Float32}(undef, MAXSP)
-    xrdmlt = Vector{Float32}(undef, MAXSP)
+    # Growth multipliers default to 1.0; MULTS only overrides species named by
+    # keywords (it returns early without touching the array when none exist).
+    # Must NOT be `undef` — uninitialized entries become garbage multipliers that
+    # corrupt regen height growth (HTG→999) and make the run non-deterministic.
+    xrhmlt = ones(Float32, MAXSP)
+    xrdmlt = ones(Float32, MAXSP)
     MULTS(Int32(3), IY[ICYC], xrhmlt)
     MULTS(Int32(6), IY[ICYC], xrdmlt)
 

@@ -208,9 +208,9 @@ function GRINCR(debug::Bool, ipmodi::Int32,
             BTSDIX, SDIBC, SDIBC2, ICYC)
     end
 
-    SDICAL(Int32(0), BTSDIX)
-    SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1),
-           SDIBC, SDIBC2, stagea, stageb, Int32(0))
+    global BTSDIX = SDICAL(Int32(0))
+    (sdibc_v, sdibc2_v, stagea, stageb) = SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1), Int32(0))
+    global SDIBC = sdibc_v; global SDIBC2 = sdibc2_v
 
     if debug
         @printf(io_units[JOSTND],
@@ -267,9 +267,9 @@ function GRINCR(debug::Bool, ipmodi::Int32,
     global ATBA    = BA
     global ATCCF   = RELDEN
     global ATTPA   = TPROB
-    SDICAL(Int32(0), ATSDIX)
-    SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1),
-           SDIAC, SDIAC2, stagea, stageb, Int32(0))
+    global ATSDIX = SDICAL(Int32(0))
+    (sdiac_v, sdiac2_v, stagea, stageb) = SDICLS(Int32(0), Float32(0.0), Float32(999.0), Int32(1), Int32(0))
+    global SDIAC = sdiac_v; global SDIAC2 = sdiac2_v
     SILFTY()
 
     if ONTREM[7] > Float32(0.0) && lcvatv

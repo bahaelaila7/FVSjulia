@@ -37,9 +37,9 @@ NOTRIP::Bool  = false   # no tripling flag
 LFIANVB::Bool = false   # FIA NVB flag
 
 # Logical arrays indexed by species
-const LDGCAL  = falses(MAXSP)  # diameter growth calibration by species
-const LEAVESP = falses(MAXSP)  # leave species flag
-const LHTDRG  = falses(MAXSP)  # height drag flag
+const LDGCAL  = fill(false, Int(MAXSP))  # diameter growth calibration by species
+const LEAVESP = fill(false, Int(MAXSP))  # leave species flag
+const LHTDRG  = fill(false, Int(MAXSP))  # height drag flag
 
 # Integer scalars
 ICCODE::Int32  = Int32(0)    # error/warning code

@@ -167,7 +167,9 @@ function HTDBH(ifor::Integer, ispc::Integer, d::Real, h_ref::Ref{Float32}, mode:
         hat3 = Float32(4.5) + p2 * exp(-p3 * Float32(3)^p4)
         df = if hf >= hat3
             if debug; @printf(io_units[Int(JOSTND)], " H= %g  HAT3= %g  P2= %g\n", hf, hat3, p2); end
-            exp(log((log(hf - Float32(4.5)) - log(p2)) / (-p3)) * (Float32(1)/p4))
+            ratio = (log(min(hf, Float32(4.5) + p2 * Float32(0.9999)) - Float32(4.5)) - log(p2)) / (-p3)
+            ratio > 0.0f0 ? exp(log(ratio) * (Float32(1)/p4)) : Float32(100.0)
+            # original: exp(log((log(hf-4.5)-log(p2))/(-p3))*(1/p4)) — fails when hf≥4.5+p2
         else
             (((hf - Float32(4.51)) * (Float32(3) - db)) / (hat3 - Float32(4.51))) + db
         end

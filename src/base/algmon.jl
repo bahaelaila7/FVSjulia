@@ -758,8 +758,9 @@ function ALGEVL(lreg::AbstractVector{Bool}, mxl::Integer,
             end
         end
 
-        # Unary arithmetic (16, 22..34)
-        if instr <= 34
+        # Unary arithmetic (16, 22..34) — must exclude binary ops 11..15, which
+        # are handled below; otherwise divide(14) etc. fall here and err_2020.
+        if instr > 15 && instr <= 34
             if instr == 16; j_uni = 1
             else
                 j_uni = instr - 20

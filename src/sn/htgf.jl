@@ -89,7 +89,9 @@ function HTGF()
 
             hti = HT[i]
 
-            # Mode 0: compute HTMAX (and AGET is set as a side-effect but ignored here)
+            # Mode 0: compute HTMAX AND AGET (tree age from current height HTI).
+            # AGET is RETURNED here and must be preserved for the mode-9 call below,
+            # which computes the 5-yr increment starting from that age.
             aget  = Ref(Float32(0.0))
             htmax = Ref(Float32(0.0))
             htg1  = Ref(Float32(0.0))
@@ -107,9 +109,10 @@ function HTGF()
                 @goto label_4
             end
 
-            # Mode 9: compute 5-year HTG1
+            # Mode 9: compute 5-year HTG1 starting from AGET (set by the mode-0 call).
+            # Do NOT reset aget here — Fortran preserves it (htgf.f: no AGET reset
+            # between the mode-0 and mode-9 HTCALC calls).
             htg1[] = Float32(0.0)
-            aget[]  = Float32(0.0)
             href[]  = hti
             HTCALC(Int32(9), ispc, aget, href, htmax, htg1, JOSTND, debug)
 

@@ -74,7 +74,7 @@ function COMCUP()
                 spcnt[is, im] += PROB[i]
             end
             RDPSRT(ITRN, DBH, IND, true)
-            PCTILE(ITRN, IND, PROB, WK3, @view(ONTCUR[7:end]))
+            ONTCUR[7] = PCTILE(ITRN, IND, PROB, WK3)
             # Estimate missing total tree ages
             for i in 1:Int(ITRN)
                 if ABIRTH[i] <= Float32(0)
