@@ -1,0 +1,16 @@
+# Simulation output — FVS writes these next to the keyword file or in the cwd.
+# (Run sims in a working dir, not the repo root; the test scripts use temp dirs.)
+*.db
+*.sum
+*.out
+*.tls
+*.trl
+*.chp
+*.sng
+
+# Prebuilt fast-start artifacts (large; rebuild locally — see tools/README.md)
+tools/*.so
+
+# Local build-mode toggle (written by tools/build_pkgimage.sh / tools/dev_mode.sh)
+LocalPreferences.toml
+/.claude/

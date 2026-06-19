@@ -334,15 +334,176 @@ include("extensions/econ/eccalc.jl")     # Economics ECSETP/ECSTATUS/ECCALC
 include("base/prtrls.jl")    # PRTRLS/DBSTRLS/DBSATRTLS/DBSCUTS: tree list output to SQLite
 
 # ---------------------------------------------------------------------------
-# 18. Module initialization — mirrors Fortran BLOCK DATA (runs at module load)
+# 18. Module initialization — mirrors Fortran BLOCK DATA + program-start state.
 # ---------------------------------------------------------------------------
-BLKDAT!()
-FMCBLK!()  # initialize fire carbon product tables (FAPROP, BIOGRP)
+BLKDAT!()      # 90-species data + IO unit defaults
+FMCBLK!()      # fire carbon product tables (FAPROP, BIOGRP)
+
+# Snapshot the pristine program-start state (all mutable COMMON-block globals)
+# right after the BLOCK DATA init, so __init__ can restore it at every load.
+# This is essential because the precompile workload (section 20) runs a full
+# simulation that mutates these globals; without the restore, that post-run
+# state would be serialized into the precompile cache and every fresh process
+# would start dirty (e.g. MORDAT=true → first stand reads as empty).
+const _PRISTINE_ARRAYS  = IdDict{Symbol,Any}()
+const _PRISTINE_SCALARS = Dict{Symbol,Any}()
+function _snapshot_state!()
+    M = @__MODULE__
+    empty!(_PRISTINE_ARRAYS); empty!(_PRISTINE_SCALARS)
+    for nm in names(M; all=true)
+        (nm === :_PRISTINE_ARRAYS || nm === :_PRISTINE_SCALARS) && continue
+        isdefined(M, nm) || continue
+        v = getglobal(M, nm)
+        if Base.isconst(M, nm)
+            v isa Array && (_PRISTINE_ARRAYS[nm] = deepcopy(v))   # const binding, mutate-in-place
+        elseif v isa Number || v isa AbstractString
+            _PRISTINE_SCALARS[nm] = v                             # reassignable scalar global
+        end
+    end
+    return nothing
+end
+function _restore_state!()
+    M = @__MODULE__
+    for (nm, v) in _PRISTINE_ARRAYS
+        copyto!(getglobal(M, nm), v)
+    end
+    for (nm, v) in _PRISTINE_SCALARS
+        setglobal!(M, nm, v)
+    end
+    return nothing
+end
+_snapshot_state!()
+
+# Runs at EVERY module load (after the precompiled image is deserialized) →
+# restores pristine state regardless of what the precompile workload left baked.
+function __init__()
+    _restore_state!()
+    # Drop any external OS resources (file handles / SQLite connections) that may
+    # have been baked into the image — deserialized live handles are invalid and
+    # closing them segfaults. They are re-established per run (_init_io_units! /
+    # DBSCASE). The workload also closes them before serialization (so this is a
+    # no-op in practice), making it safe even though we don't close them here.
+    empty!(io_units)
+    _dbs_out_db[] = nothing
+    _dbs_in_db[]  = nothing
+    return nothing
+end
 
 # ---------------------------------------------------------------------------
 # 19. Public entry point
 # ---------------------------------------------------------------------------
 # main() is provided by base/main.jl (included above).
-# The module-level initializers are called by the FVS! driver via _init_io_units!() etc.
+
+# ---------------------------------------------------------------------------
+# 19b. Signature force-precompile — compiles EVERY method (without running it) by
+# substituting the concrete types this Fortran-style port actually uses for its
+# abstract argument annotations (::Integer→Int32, ::Real→Float32, ::AbstractVector
+# →Vector{Float32|Int32}, Ref→Ref{Int32|Float32|Bool}, ::AbstractString→String…).
+# This bakes methods the runtime WORKLOAD never reaches — rare keyword handlers,
+# non-SN volume paths, AND newly-added functions — so coverage doesn't silently
+# rot as the codebase grows. Covers ~600 of ~870 methods; the workload adds the
+# exact-type integration specializations on top. precompile() never executes the
+# method, so there is no state mutation. (tools/coverage_report.jl tracks the gap.)
+# ---------------------------------------------------------------------------
+function _precompile_all!()
+    M = @__MODULE__
+    _cands(T) =
+        (T === Integer || T === Signed) ? Any[Int32] :
+        (T === Real || T === AbstractFloat || T === Number) ? Any[Float32] :
+        T === AbstractString ? Any[String, SubString{String}] :
+        T === AbstractChar ? Any[Char] :
+        (T isa Type && T <: Ref && !isconcretetype(T)) ? Any[Base.RefValue{Int32}, Base.RefValue{Float32}, Base.RefValue{Bool}] :
+        (T isa Type && T <: AbstractMatrix && !isconcretetype(T)) ? Any[Matrix{Float32}] :
+        (T isa Type && T <: AbstractVector && !isconcretetype(T)) ? Any[Vector{Float32}, Vector{Int32}] :
+        (T isa Type && isconcretetype(T)) ? Any[T] : Any[]
+    for nm in names(M; all=true)
+        isdefined(M, nm) || continue
+        f = getglobal(M, nm)
+        (f isa Function) || continue
+        for m in methods(f)
+            sig = m.sig
+            sig isa DataType || continue
+            any(p -> p isa TypeVar, sig.parameters) && continue
+            params = sig.parameters[2:end]
+            any(p -> !(p isa Type), params) && continue          # skip varargs
+            length(params) > 6 && continue
+            choices = map(_cands, collect(params))
+            any(isempty, choices) && continue                    # an arg we can't guess
+            (isempty(choices) ? 1 : prod(length.(choices))) > 64 && continue
+            for combo in (isempty(choices) ? [()] : Iterators.product(choices...))
+                try; precompile(f, Tuple(combo)); catch; end
+            end
+        end
+    end
+    return nothing
+end
+
+# ---------------------------------------------------------------------------
+# 20. Precompile workload — runs full simulations during precompilation so the
+# big simulation methods (INITRE/TREGRO/DGF/HTGF/MORTS/fire/econ/volume/DBS…)
+# are baked into FVSjulia's compiled cache. PackageCompiler's trace-compile
+# alone does NOT capture these large functions, so this PrecompileTools workload
+# is what makes the system image fast (tools/build_sysimage.jl bundles the cache).
+#
+# GATED behind the `precompile_workload` preference (default false) so normal
+# `using FVSjulia` precompiles fast (~10s). The sysimage build flips it to true
+# (which invalidates the cache → re-precompiles WITH the workload). Safe because
+# __init__ restores pristine COMMON-block state on every load (§18 above).
+# ---------------------------------------------------------------------------
+using PrecompileTools, Preferences
+@compile_workload begin
+    if @load_preference("precompile_workload", false) == true
+        _precompile_all!()   # bake every signature-substitutable method (incl. untouched/new code)
+        _pcdir = normpath(joinpath(@__DIR__, "..", "assets", "precompile"))   # bundled .key data (NOT in src/)
+        _repo  = normpath(joinpath(@__DIR__, "..", ".."))
+        _keys  = String[
+            joinpath(_pcdir, "workload.key"),                                                # sn.key: growth/thin/fire/econ/sprouting/DBS
+            joinpath(_repo, "ForestVegetationSimulator", "tests", "FVSsn", "snt01.key"),      # TREEFMT + external .tre
+            joinpath(_repo, "ForestVegetationSimulator", "tests", "testSetFromFMSC", "sntest.key"),  # PLANT establishment
+            joinpath(_pcdir, "sn_fiavbc.key"),                                               # FIAVBC FIA-NVB volume
+        ]
+        # Run each key from a COPY in a temp dir (FVS writes .sum/.out next to the
+        # keyword file, so running in place would pollute the source dirs).
+        _runkey(srckey, stopfile=nothing) = mktempdir() do d
+            stem = splitext(basename(srckey))[1]
+            kdst = joinpath(d, basename(srckey)); cp(srckey, kdst)
+            tre = joinpath(dirname(srckey), stem * ".tre")
+            isfile(tre) && cp(tre, joinpath(d, stem * ".tre"))
+            cd(d) do
+                try
+                    redirect_stdout(devnull) do; redirect_stderr(devnull) do
+                        if stopfile === nothing
+                            main(["--keywordfile=$kdst"])
+                        else
+                            sf = joinpath(d, stopfile)
+                            main(["--keywordfile=$kdst", "--stoppoint=2,2020,$sf"])
+                            main(["--restart=$sf"])
+                        end
+                    end; end
+                catch
+                end
+            end
+        end
+        for _k in _keys
+            isfile(_k) && _runkey(_k)
+        end
+        # stop/restart (PUTSTD/GETSTD serialization)
+        _s1 = joinpath(_repo, "ForestVegetationSimulator", "tests", "FVSsn", "snt01.key")
+        isfile(_s1) && _runkey(_s1, "fvs.stop")
+
+        # Close every file handle / DB connection the workload opened, so NO live
+        # OS resource gets serialized into the package image. (Deserialized stale
+        # handles segfault when closed; closing them HERE — where they are valid —
+        # avoids that. Done in the workload, not __init__, for exactly this reason.)
+        for _io in collect(values(io_units))
+            (_io === stdout || _io === stderr) && continue
+            try; close(_io); catch; end
+        end
+        empty!(io_units)
+        try; DBSCLOSE(true, true); catch; end
+        _dbs_out_db[] = nothing
+        _dbs_in_db[]  = nothing
+    end
+end
 
 end # module FVSjulia
